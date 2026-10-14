@@ -24,7 +24,7 @@ The bridge in `bin/` is build-specific. Do not use it with a different executabl
 - `native/src/` and `native/include/`: bridge, rotation validation, instrumentation, and controlled launcher source.
 - `bin/`: build-specific bridge DLL and launcher.
 - `tools/patch_dayz_exe.py`: creates a patched copy of either supported executable, without overwriting the input.
-- `diagnostics/`: optional read-only debug consoles.
+- `diagnostics/debug_console.py` and `diagnostics/start_debug_consoles.ps1`: optional Python-based read-only debug consoles and launcher.
 - `manifest.json`: supported executable hashes, changed files, and package integrity hashes.
 
 ## Apply script patches
@@ -53,10 +53,16 @@ Repeat for the server executable. Place the matching `bin/dayz_rotation_move_v12
 
 ## Debug consoles
 
-The two debug consoles are optional diagnostics, not required for rotation. They read logs and observe loaded modules for the supplied executable paths. Set `RuntimeRoot` to a folder containing `client1` and `server` subfolders with each process's `trial_profile` logs, and pass the actual client/server executable paths:
+The two debug consoles are optional diagnostics, not required for rotation. They observe loaded modules for the supplied executable paths and can tail the real profile folders used by the running game and server. Set `RuntimeRoot` to a writable folder for launcher receipts, then pass each process's actual profile folder using `-ClientProfileDir` and `-ServerProfileDir`:
 
 ```powershell
-.\diagnostics\start_debug_consoles.ps1 -RuntimeRoot 'D:\DayZTest' -ClientExe 'D:\DayZTest\client1\DayZ_x64.exe' -ServerExe 'D:\DayZTest\server\DayZServerP69_x64.exe' -LoaderLogDir 'D:\DayZTest\logs'
+.\diagnostics\start_debug_consoles.ps1 `
+  -RuntimeRoot 'D:\DayZTest\receipts' `
+  -ClientExe 'D:\DayZTest\client1\DayZ_x64.exe' `
+  -ServerExe 'D:\DayZTest\server\DayZServerP69_x64.exe' `
+  -LoaderLogDir 'D:\DayZTest\logs' `
+  -ClientProfileDir 'D:\DayZTest\client1\profiles' `
+  -ServerProfileDir 'D:\DayZTest\server\profiles'
 ```
 
 The consoles are read-only diagnostics; they do not decode arbitrary executable memory or provide a complete binary execution trace.

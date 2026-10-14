@@ -31,6 +31,12 @@ class MODULEENTRY32W(ctypes.Structure):
       ('GlblcntUsage',wintypes.DWORD),('ProccntUsage',wintypes.DWORD),('modBaseAddr',ctypes.POINTER(ctypes.c_byte)),
       ('modBaseSize',wintypes.DWORD),('hModule',wintypes.HMODULE),('szModule',wintypes.WCHAR*256),('szExePath',wintypes.WCHAR*260)]
 
+class PROCESSENTRY32W(ctypes.Structure):
+    _fields_=[('dwSize',wintypes.DWORD),('cntUsage',wintypes.DWORD),('th32ProcessID',wintypes.DWORD),
+      ('th32DefaultHeapID',ctypes.c_size_t),('th32ModuleID',wintypes.DWORD),('cntThreads',wintypes.DWORD),
+      ('th32ParentProcessID',wintypes.DWORD),('pcPriClassBase',ctypes.c_long),('dwFlags',wintypes.DWORD),
+      ('szExeFile',wintypes.WCHAR*260)]
+
 def owned_modules(pid,expected_exe):
     k=ctypes.WinDLL('kernel32',use_last_error=True)
     k.OpenProcess.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.DWORD];k.OpenProcess.restype=wintypes.HANDLE
@@ -58,6 +64,26 @@ def owned_modules(pid,expected_exe):
         return result
     finally:k.CloseHandle(snapshot)
 
+def find_owned_process(expected_exe):
+    k=ctypes.WinDLL('kernel32',use_last_error=True)
+    k.CreateToolhelp32Snapshot.argtypes=[wintypes.DWORD,wintypes.DWORD];k.CreateToolhelp32Snapshot.restype=wintypes.HANDLE
+    k.Process32FirstW.argtypes=[wintypes.HANDLE,ctypes.POINTER(PROCESSENTRY32W)];k.Process32FirstW.restype=wintypes.BOOL
+    k.Process32NextW.argtypes=k.Process32FirstW.argtypes;k.Process32NextW.restype=wintypes.BOOL
+    k.CloseHandle.argtypes=[wintypes.HANDLE];k.CloseHandle.restype=wintypes.BOOL
+    snapshot=k.CreateToolhelp32Snapshot(0x2,0)
+    if snapshot==ctypes.c_void_p(-1).value:return None
+    try:
+        entry=PROCESSENTRY32W();entry.dwSize=ctypes.sizeof(entry);candidates=[]
+        found=k.Process32FirstW(snapshot,ctypes.byref(entry))
+        while found:
+            if entry.szExeFile.casefold()==Path(expected_exe).name.casefold():candidates.append(entry.th32ProcessID)
+            found=k.Process32NextW(snapshot,ctypes.byref(entry))
+    finally:k.CloseHandle(snapshot)
+    for candidate in candidates:
+        modules=owned_modules(candidate,expected_exe)
+        if modules is not None:return candidate,modules
+    return None
+
 def severity(line,source):
     if re.search(r'\b(?:status|result|client_status)=(-?\d+)',line):
         values=re.findall(r'\b(?:status|result|client_status)=(-?\d+)',line)
@@ -68,7 +94,7 @@ def severity(line,source):
     if '[DZ62_MOVE_ACK]' in line or '[DZ62_MOVE_CLIENT]' in line:return 'ok'
     return 'normal'
 
-def main(role, runtime_root, loader_log_dir, expected_exe):
+def main(role, runtime_root, loader_log_dir, expected_exe, profile_dir=None):
     import tkinter as tk
     from tkinter import ttk
     label='JOGO' if role=='client1' else 'SERVIDOR'
@@ -93,13 +119,20 @@ def main(role, runtime_root, loader_log_dir, expected_exe):
     events=deque(maxlen=4000);displayed=0;pid=0;modules={};module_time=0;revision=0;rendered=None
     role_root=Path(runtime_root)/role
     expected=str(Path(expected_exe).resolve())
-    sources=[('SCRIPT',Tail(role_root/'trial_profile/script.log')),('RPT',Tail(role_root/'trial_profile'/('DayZ_x64.RPT' if role=='client1' else 'DayZServerP69_x64.RPT'))),
-      ('NATIVO',Tail(role_root/'trial_profile/native_rotation.log')),('LOADER',Tail(Path(loader_log_dir)/(role+'_launcher.txt')))]
+    profile=Path(profile_dir) if profile_dir else role_root/'trial_profile'
+    rpt_name='DayZ_x64.RPT' if role=='client1' else 'DayZServerP69_x64.RPT'
+    sources=[('SCRIPT',Tail(profile/'script.log')),('RPT',Tail(profile/rpt_name)),
+      ('NATIVO',Tail(profile/'native_rotation.log')),('LOADER',Tail(Path(loader_log_dir)/(role+'_launcher.txt')))]
     def emit(source,line,historical=False):
         nonlocal revision
         stamp=time.strftime('%H:%M:%S')+f'.{int(time.time()%1*1000):03d}'
         events.append((source,line,historical,stamp))
         revision+=1
+    for source,tail in sources:
+        if source!='LOADER' and not tail.path.exists():
+            emit('CONSOLE',f'FONTE AUSENTE: {source} esperado em {tail.path}')
+        elif source!='LOADER':
+            emit('CONSOLE',f'FONTE ATIVA: {source} lendo {tail.path}')
     def render():
         nonlocal displayed,rendered
         if paused.get():return
@@ -139,6 +172,15 @@ def main(role, runtime_root, loader_log_dir, expected_exe):
                 if newest!=pid:
                     pid=newest;modules={};module_time=0
                     emit('LOADER',f'PID={pid} DLL={info.get("dll","não registrada")} SHA256={info.get("dll_sha256","não registrada")}')
+            if not pid and time.monotonic()-module_time>=2:
+                module_time=time.monotonic();found=find_owned_process(expected)
+                if found is not None:
+                    pid,observed=found;modules={}
+                    emit('PROCESS',f'PROCESSO OBSERVADO PID={pid} executável={expected}')
+                    for name,address,size,path in observed:
+                        modules[name.casefold()+':'+str(address)]=(name,address,size,path)
+                        emit('DLL',f'MÓDULO OBSERVADO {name} base=0x{address:x} bytes={size} caminho={path}')
+                    header.set(f'DEBUG {label} | PID {pid} | {len(modules)} módulos observados')
             if pid and time.monotonic()-module_time>=2:
                 module_time=time.monotonic();observed=owned_modules(pid,expected)
                 if observed is not None:
@@ -149,7 +191,9 @@ def main(role, runtime_root, loader_log_dir, expected_exe):
                     for key,entry in modules.items():
                         if key not in new:emit('DLL','MÓDULO NÃO PRESENTE NA NOVA AMOSTRA '+entry[0])
                     modules=new;header.set(f'DEBUG {label} | PID {pid} | {len(modules)} módulos observados')
-                else:header.set(f'DEBUG {label} | PID {pid} indisponível; aguardando abertura')
+                else:
+                    emit('PROCESS',f'PROCESSO PID={pid} não está mais disponível; aguardando reabertura')
+                    header.set(f'DEBUG {label} | aguardando processo');pid=0;modules={}
             render()
             (HERE/f'ready_{role}.json').write_text(json.dumps({'role':role,'console_visible':bool(root.winfo_viewable()),'title':root.title(),'game_pid':pid,'events_buffered':len(events),'displayed':displayed,'modules_observed':len(modules)},indent=2),encoding='utf-8')
         except Exception as error:
@@ -160,9 +204,10 @@ def main(role, runtime_root, loader_log_dir, expected_exe):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--role',choices=['client1','server'],required=True)
-    parser.add_argument('--runtime-root',required=True,help='Pasta que contém client1/server e seus trial_profile')
+    parser.add_argument('--runtime-root',required=True,help='Pasta de logs auxiliares/recibos')
     parser.add_argument('--game-exe',required=True,help='Caminho completo do executável observado')
     parser.add_argument('--loader-log-dir',default=None,help='Pasta dos recibos e logs do launcher; padrão: runtime-root')
+    parser.add_argument('--profile-dir',default=None,help='Pasta real que contém script.log e o RPT deste processo')
     args=parser.parse_args();loader_log_dir=args.loader_log_dir or args.runtime_root
-    try:main(args.role,args.runtime_root,loader_log_dir,args.game_exe)
+    try:main(args.role,args.runtime_root,loader_log_dir,args.game_exe,args.profile_dir)
     except Exception:(HERE/f'error_{args.role}.log').write_text(traceback.format_exc(),encoding='utf-8');raise

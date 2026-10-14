@@ -5,3 +5,6 @@ native/build/
 profile/
 __pycache__/
 *.pyc
+diagnostics/ready_*.json
+diagnostics/error_*.log
+diagnostics/console_*.log
