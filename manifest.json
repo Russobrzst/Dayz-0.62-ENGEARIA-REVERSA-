@@ -3,7 +3,7 @@
   "runtime_user_test_pending": true,
   "client_exe_sha256": "423212bad091f47f05bd7621f6ba4040d4f3db4c93752c3f19ee0fa7a62bdb9d",
   "server_exe_sha256": "531330410a8894b81b10e9e2f3d562b4f8a4c35c925d7504aff5717a17ccccb6",
-  "native_dll_sha256": "aa89fa7b7b0db2e073e73bec764bb57bea2009305b694d000f49d97aa578e6ed",
+  "native_dll_sha256": "e45f0dcb139aa5976a5f4ddb986eef93f0855b02e112d57bb79606207880389f",
   "patches": [
     {
       "role": "client1",
@@ -195,8 +195,20 @@
     "native/include/near_dispatch.hpp",
     "native/include/rectangle_call.hpp",
     "native/include/rotation_core.hpp",
-    "native/src/debug_loader.cpp"
+    "native/src/debug_loader.cpp",
+    "native/include/grid_dispatch.hpp",
+    "tools/patch_dayz_exe.py"
   ],
   "required_builds": "DayZ 0.62.144063 client and DayZServer 0.62.140099 server, x64",
-  "notes": "The script patches are based on local extracted scripts. The binaries and source game files themselves are excluded."
+  "notes": "Source patches and authored native bridge are included. Original game binaries are excluded; the patcher only accepts the exact supported base hashes and creates local output copies.",
+  "native_loader_sha256": "64abe4235d6903a8e493fcf780f375ee789f85d278dfdf981997abf65a0a0eb5",
+  "patched_client_exe_sha256": "d2e1d5fc10b5cd58ce0867a65c5c762ba084c1c2a01f0257b657d8d668ddb07d",
+  "patched_server_exe_sha256": "ebd19cc0614736d1f2bd2a3b0f20db11c5de3d1751482ed9207fe6289c15b24e",
+  "binary_patcher": {
+    "source": "tools/patch_dayz_exe.py",
+    "source_sha256": "b5bc92fb5dcc1cd486a237cfa956859797b888ac099edcd6b8a0678049e3a7fd",
+    "patch_type": "PE import table plus x64 entry-point bootstrap",
+    "outputs_distributed": false,
+    "authenticode": "client output has its security directory cleared; original is unchanged"
+  }
 }
