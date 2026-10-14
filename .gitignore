@@ -3,3 +3,5 @@ native/build/
 *.rpt
 *.mdmp
 profile/
+__pycache__/
+*.pyc
