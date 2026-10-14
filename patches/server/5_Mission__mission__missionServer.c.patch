@@ -1,0 +1,132 @@
+--- a/scripts/5_Mission/mission/missionServer.c
++++ b/scripts/5_Mission/mission/missionServer.c
+@@ -1,5 +1,13 @@
+ class MissionServer extends MissionBase
+ {
++    ItemBase m_DZ62TrialBag;
++    ItemBase m_DZ62TrialItem;
++    float m_DZ62TrialTime;
++    int m_DZ62TrialPhase = 99; // Automatic experiment disabled after visual verification.
++    bool m_DZ62Prepared;
++    bool m_DZ62RotationObserved;
++    bool m_DZ62TrialInserted;
++
+ 	Timer m_UpdatePlayerStatsTimer;
+ 	autoptr array<Man> m_Players;
+ 	int m_currentPlayer;
+@@ -53,6 +61,8 @@
+ 	void OnUpdate(float timeslice)
+ 	{
+ 		TickScheduler(timeslice);//tick scheduler
++	
++        DZ62_RotationTrialTick(timeslice);
+ 	}
+ 
+ 	bool IsServer()
+@@ -174,4 +184,106 @@
+ 		PlayerBase player = prms.param2;
+ 		if( player ) player.OnDisconnect();
+ 	}
++
++    void DZ62_RotationTrialTick(float timeslice)
++    {
++        if (m_DZ62TrialPhase == 99) return;
++        if (m_DZ62TrialPhase == 0)
++        {
++            if (m_Players.Count() < 1) return;
++            m_DZ62TrialTime += timeslice;
++            if (m_DZ62TrialTime < 2) return;
++            m_DZ62TrialTime = 0;
++            Man wearer = m_Players.Get(0);
++            for (int b = 0; b < wearer.AttachmentsCount(); b++)
++            {
++                ItemBase bag = (ItemBase)wearer.GetAttachmentFromIndex(b);
++                if (!bag) continue;
++                Cargo existing = bag.GetCargo();
++                // The user-selected pants have a 2x2 cargo. Require one item only.
++                if (!existing || existing.GetWidth() != 2 || existing.GetHeight() != 2 || existing.GetItemCount() != 1) continue;
++                for (int s = 0; s < existing.GetItemCount(); s++)
++                {
++                    ItemBase shoe = (ItemBase)existing.GetItem(s);
++                    if (!shoe) continue;
++                    int w, h, x, y;
++                    existing.GetItemSize(s, w, h);
++                    existing.GetItemPos(s, x, y);
++                    // Both footprints must fit, and the core checks overlap before mutation.
++                    if (w != 2 || h != 1 || x + 2 > existing.GetWidth() || y + 2 > existing.GetHeight()) continue;
++                    int ping = existing.Grid2Index(0, -620062);
++                    Print("[DZ62_READY] native_binding=" + ping);
++                    if (ping != 620063) { m_DZ62TrialPhase = 99; return; }
++                    m_DZ62TrialBag = bag;
++                    m_DZ62TrialItem = shoe;
++                    m_DZ62TrialInserted = true;
++                    m_DZ62Prepared = true;
++                    m_DZ62TrialPhase = 1;
++                    m_DZ62TrialTime = 0;
++                    Print("[DZ62_PANTS_TRIAL] selected existing shoe; container=" + bag.GetType() + " item=" + shoe.GetType() + " x=" + x + " y=" + y + " w=" + w + " h=" + h);
++                    return;
++                }
++            }
++            return;
++        }
++        m_DZ62TrialTime += timeslice;
++        Cargo cargo = m_DZ62TrialBag.GetCargo();
++        if (!cargo) { Print("[DZ62_ERROR] trial cargo missing"); m_DZ62TrialPhase = 99; return; }
++        int index = cargo.FindEntityInCargo(m_DZ62TrialItem);
++        if (index < 0)
++        {
++            if (m_DZ62TrialPhase == 1 && m_DZ62TrialTime < 5) return;
++            Print("[DZ62_ERROR] trial item moved or removed"); m_DZ62TrialPhase = 99; return;
++        }
++        if (m_DZ62TrialPhase == 1 && m_DZ62TrialTime >= 1)
++        {
++            int baseline = m_DZ62TrialBag.DZ62_SetRotationExisting(index, false);
++            Print("[DZ62_TRIAL] baseline status=" + baseline);
++            int baseline_w, baseline_h;
++            cargo.GetItemSize(index, baseline_w, baseline_h);
++            Print("[DZ62_SHOE_SIZE] phase=baseline type=" + m_DZ62TrialItem.GetType() + " w=" + baseline_w + " h=" + baseline_h);
++            if (baseline != 0 && baseline != 1) { m_DZ62TrialPhase = 99; return; }
++            m_DZ62TrialPhase = 2; m_DZ62TrialTime = 0;
++        }
++        else if (m_DZ62TrialPhase == 2 && m_DZ62TrialTime >= 30)
++        {
++            if (m_DZ62TrialBag.m_DZ62ClientAckRevision != m_DZ62TrialBag.m_DZ62Revision)
++            {
++                if (m_DZ62TrialTime >= 180) { Print("[DZ62_ERROR] client baseline acknowledgement timeout"); m_DZ62TrialPhase = 99; }
++                return;
++            }
++            int width, height; GetGame().GetInventoryItemSize(m_DZ62TrialItem, width, height);
++            if (width == height) { Print("[DZ62_ERROR] trial item is square"); m_DZ62TrialPhase = 99; return; }
++            int rotated = m_DZ62TrialBag.DZ62_SetRotationExisting(index, true);
++            Print("[DZ62_TRIAL] rotate status=" + rotated);
++            int rotate_w, rotate_h;
++            cargo.GetItemSize(index, rotate_w, rotate_h);
++            Print("[DZ62_SHOE_SIZE] phase=rotate type=" + m_DZ62TrialItem.GetType() + " w=" + rotate_w + " h=" + rotate_h);
++            if (rotated != 0 && rotated != 1) { m_DZ62TrialPhase = 99; return; }
++            m_DZ62TrialPhase = 3; m_DZ62TrialTime = 0;
++        }
++        else if (m_DZ62TrialPhase == 3 && m_DZ62TrialTime >= 90)
++        {
++            if (m_DZ62TrialBag.m_DZ62ClientAckRevision != m_DZ62TrialBag.m_DZ62Revision && m_DZ62TrialTime < 120) return;
++            m_DZ62RotationObserved = m_DZ62TrialBag.m_DZ62ClientAckRevision == m_DZ62TrialBag.m_DZ62Revision;
++            if (m_DZ62TrialBag.m_DZ62ClientAckRevision != m_DZ62TrialBag.m_DZ62Revision) Print("[DZ62_ERROR] rotated-state acknowledgement timeout; restoring anyway");
++            int restored = m_DZ62TrialBag.DZ62_SetRotationExisting(index, false);
++            Print("[DZ62_TRIAL] restore status=" + restored);
++            int restore_w, restore_h;
++            cargo.GetItemSize(index, restore_w, restore_h);
++            Print("[DZ62_SHOE_SIZE] phase=restore type=" + m_DZ62TrialItem.GetType() + " w=" + restore_w + " h=" + restore_h);
++            if (restored != 0 && restored != 1) { m_DZ62TrialPhase = 99; return; }
++            m_DZ62TrialPhase = 4; m_DZ62TrialTime = 0;
++        }
++        else if (m_DZ62TrialPhase == 4)
++        {
++            if (m_DZ62TrialBag.m_DZ62ClientAckRevision == m_DZ62TrialBag.m_DZ62Revision)
++            {
++                if (m_DZ62RotationObserved) Print("[DZ62_TRIAL] restored-state acknowledged; server and one-client sequence completed");
++                else Print("[DZ62_TRIAL] restored-state acknowledged; rotated-state replication NOT confirmed");
++                m_DZ62TrialPhase = 99;
++            }
++            else if (m_DZ62TrialTime >= 120) { Print("[DZ62_ERROR] restored-state acknowledgement timeout"); m_DZ62TrialPhase = 99; }
++        }
++    }
+ }

@@ -1,0 +1,24 @@
+--- a/scripts/5_Mission/GUI/Inventory/InventoryContainer/InventoryContainerEntity.c
++++ b/scripts/5_Mission/GUI/Inventory/InventoryContainer/InventoryContainerEntity.c
+@@ -479,6 +479,7 @@
+ 		if (m_entity.IsNull() || dragged_item == NULL) return false;
+ 		
+ 		if (manager.IsDragging() == false) return false;
++        if(manager.DZ62_RestrictDrop() && m_entity.Ptr()==GetGame().GetPlayer()) return manager.DZ62_ReequipDrop(m_entity.Ptr(),true);
+ 		
+ 		if (dragged_item && dragged_item.CanRemoveEntity() == false)
+ 		{
+@@ -507,6 +508,13 @@
+ 		InventoryItem dragged_item = manager.GetItem();
+ 		
+ 		if (manager.IsDragging() == false || dragged_item == NULL) return false;
++        if (manager.DZ62_RestrictDrop())
++        {
++            if(m_entity.Ptr()==GetGame().GetPlayer()) manager.DZ62_ReequipDrop(m_entity.Ptr(),false);
++            else manager.DZ62_SpaceMessage("Solte o item em um grid de cargo.");
++            manager.Drop();return true;
++        }
++
+ 		
+ 		if (dragged_item != m_entity.Ptr() && m_entity.Ptr().CanTakeEntityAsOwned(dragged_item) ) 
+ 		{

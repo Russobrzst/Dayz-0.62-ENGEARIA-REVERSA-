@@ -1,0 +1,130 @@
+--- a/scripts/5_Mission/GUI/InventoryMenu.c
++++ b/scripts/5_Mission/GUI/InventoryMenu.c
+@@ -103,6 +103,7 @@
+ 
+ 	void ~InventoryMenu()
+ 	{
++        GetGame().GetCallQueue(CALL_CATEGORY_GUI).RemoveCalls(this);
+ 		s_ground_container_list_switch = false;
+ 		s_equipment_container_list_switch = false;
+ 		s_target_container_list_switch = false;
+@@ -400,6 +401,9 @@
+ 
+ 	void OnHide()
+ 	{
++        GetGame().GetCallQueue(CALL_CATEGORY_GUI).RemoveCalls(this);
++        InventoryManager pending_manager=InventoryManager.GetInstance();
++        if(pending_manager) pending_manager.DZ62_MenuClosed();
+ 		super.OnHide();
+ 			
+ 			PPEffects.SetBlurInventory(0);	
+@@ -478,6 +482,10 @@
+ 			Man player = GetGame().GetPlayer();
+ 			ItemPreviewWidget ipw = w;
+ 			EntityAI item = ipw.GetItem();
++            InventoryManager protected_manager = InventoryManager.GetInstance();
++            if (protected_manager && protected_manager.DZ62_IsStoredRotation((InventoryItem)item))
++            { protected_manager.DZ62_SpaceMessage("Volte a orientacao original com ESPACO antes de mover."); return true; }
++
+ 			EntityAI item_in_hands = player.GetEntityInHands();
+ 
+ 			if (item && item.IsInventoryItem() && item.GetOwnerPlayer() == player && item_in_hands != item)
+@@ -672,6 +680,7 @@
+ 
+ 	void PerformRefreshInventory()
+ 	{
++        if(!m_ground_objects || !m_ground_objects_containers) return;
+ 		Man player = GetGame().GetPlayer();
+ 		if( player == NULL)
+ 		{
+@@ -680,7 +689,8 @@
+ 		
+ 		if (player.CanOpenInventory() == false)
+ 		{
+-			GetGame().GetUIManager().GetMenu().UnlockControls();
++			UIScriptedMenu active_menu=GetGame().GetUIManager().GetMenu();
++            if(active_menu) active_menu.UnlockControls();
+ 			GetGame().GetUIManager().HideMenu(MENU_INVENTORY);
+ 			return;
+ 		}
+@@ -810,6 +820,13 @@
+ 		
+ 		InventoryManager manager = InventoryManager.GetInstance();
+ 		InventoryItem dragged_item = manager.GetItem();
++        if (manager.DZ62_RestrictDrop())
++        {
++            if(reciever && reciever.GetName()=="HeaderBgHands") manager.DZ62_ReequipDrop(GetGame().GetPlayer(),true,true);
++            else manager.SetItemColor(InventoryGrid.ITEM_COLOR_WRONG);
++            return true;
++        }
++
+ 		PlayerBase player = GetGame().GetPlayer();
+ 		HidePanelBorders();
+ 
+@@ -892,6 +909,13 @@
+ 		
+ 		InventoryManager manager = InventoryManager.GetInstance();
+ 		InventoryItem dragged_item = manager.GetItem();
++        if (manager.DZ62_RestrictDrop())
++        {
++            if(reciever && reciever.GetName()=="HeaderBgHands") manager.DZ62_ReequipDrop(GetGame().GetPlayer(),false,true);
++            else manager.SetItemColor(InventoryGrid.ITEM_COLOR_WRONG);
++            manager.Drop();return true;
++        }
++
+ 		PlayerBase player = GetGame().GetPlayer();	
+ 		
+ 		if (dragged_item && (player.GetEntityInHands() != dragged_item || player.CanRemoveEntityInHands()))
+@@ -975,4 +999,52 @@
+ 	static bool s_ground_container_list_switch;
+ 	static bool s_equipment_container_list_switch;
+ 	static bool s_target_container_list_switch;
++
++    bool m_DZSpaceHeld;
++    bool DZ62_SpaceActive()
++    {
++        return m_drag_manager && m_drag_manager.IsDragging();
++    }
++    bool DZ62_SpaceInput(int key, bool pressed)
++    {
++        if (key != KeyCode.KC_SPACE) return false;
++        if (!pressed) { m_DZSpaceHeld = false; return DZ62_SpaceActive(); }
++        if (!DZ62_SpaceActive()) return false;
++        GetGame().GetInput().DisableKey(KeyCode.KC_SPACE);
++        if (!m_DZSpaceHeld)
++        {
++            Print("[DZ62_SPACE_INPUT] mission/widget press key=" + key);
++            m_drag_manager.DZ62_ToggleSpace();
++        }
++        m_DZSpaceHeld = true;
++        return true;
++    }
++    bool OnKeyDown(Widget w, int x, int y, int key)
++    {
++        if (DZ62_SpaceInput(key,true)) return true;
++        return super.OnKeyDown(w,x,y,key);
++    }
++    bool OnKeyUp(Widget w, int x, int y, int key)
++    {
++        if (DZ62_SpaceInput(key,false)) return true;
++        return super.OnKeyUp(w,x,y,key);
++    }
++    bool OnKeyPress(Widget w, int x, int y, int key)
++    {
++        if (key == KeyCode.KC_SPACE && m_drag_manager && m_drag_manager.IsDragging()) return true;
++        return super.OnKeyPress(w,x,y,key);
++    }
++    void DZ62_OnSpaceReply(int request, int status, int width, int height)
++    {
++        if(GetGame().GetUIManager().GetMenu()!=this) return;
++        if (m_drag_manager) m_drag_manager.DZ62_SpaceReply(request,status,width,height);
++        PerformRefreshInventory();
++    }
++    void DZ62_OnReequipReply(int request,int status)
++    {
++        if(GetGame().GetUIManager().GetMenu()!=this) return;
++        if(m_drag_manager) m_drag_manager.DZ62_ReequipReply(request,status);
++        PerformRefreshInventory();
++    }
++
+ }

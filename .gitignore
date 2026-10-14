@@ -1,0 +1,5 @@
+native/build/
+*.pbo
+*.rpt
+*.mdmp
+profile/

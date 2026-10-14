@@ -1,0 +1,373 @@
+--- a/scripts/5_Mission/GUI/Inventory/InventoryManager.c
++++ b/scripts/5_Mission/GUI/Inventory/InventoryManager.c
+@@ -120,6 +120,9 @@
+ 	
+ 	void TakeToHands(InventoryItem item)
+ 	{
++        if (item && DZ62_IsStoredRotation(item))
++        { DZ62_ReequipDrop(m_player,false,true,item); return; }
++
+ 		//PrintString("TakeToHands stop timer");
+ 		//m_timer.Stop();
+ 		//delete m_entity_to_take;
+@@ -147,6 +150,11 @@
+ 
+ 	void TakeAsOwned(EntityAI entity1, EntityAI entity2)
+ 	{
++        if(entity1==GetGame().GetPlayer() && DZ62_IsStoredRotation((InventoryItem)entity2)) {DZ62_ReequipDrop(entity1,false);return;}
++        InventoryItem protected_item = (InventoryItem)entity2;
++        if (protected_item && DZ62_IsStoredRotation(protected_item))
++        { DZ62_SpaceMessage("Volte a orientacao original com ESPACO antes de mover."); return; }
++
+ 		//m_timer.Stop();
+ 		if (!entity1 || !entity2) return;
+ 		
+@@ -163,6 +171,46 @@
+ 	// drag & drop 	
+ 	void Drag(int type, InventoryItem item, InventoryGrid grid)
+ 	{
++        if(!item) {Print("[DZ62_DRAG_STALE] item no longer exists in the view");Drop();return;}
++        m_DZSpaceUsed = false;
++        m_DZOriginReady = false;
++        m_DZOriginEquipped = false;
++        delete m_DZOriginOwner;
++        m_DZOriginOwner = new Link<EntityAI>(NULL);
++        if (item)
++        {
++            EntityAI origin_owner = item.GetOwner();
++            if (origin_owner && origin_owner.GetCargo())
++            {
++                Cargo origin_cargo = origin_owner.GetCargo();
++                int origin_index = origin_cargo.FindEntityInCargo(item);
++                if (origin_index >= 0)
++                {
++                    m_DZOriginOwner = new Link<EntityAI>(origin_owner);
++                    origin_cargo.GetItemPos(origin_index, m_DZOriginX, m_DZOriginY);
++                    origin_cargo.GetItemSize(origin_index, m_DZOriginW, m_DZOriginH);
++                    GetGame().GetInventoryItemSize(item, m_DZBaseW, m_DZBaseH);
++                    m_DZDesiredRotated = m_DZOriginW == m_DZBaseH && m_DZOriginH == m_DZBaseW && m_DZBaseW != m_DZBaseH;
++                    m_DZOriginReady = true;
++                }
++            }
++            Man actor=GetGame().GetPlayer();
++            int external_kind=0;
++            if(actor && actor.GetEntityInHands()==item) external_kind=4;
++            else if(actor && origin_owner==actor && actor.HasAttachment(item)) external_kind=2;
++            else if(actor && !origin_owner && vector.Distance(actor.GetPosition(),item.GetPosition())<=3) external_kind=1;
++            if(!m_DZOriginReady && external_kind!=0)
++            {
++                EntityAI external_source=actor;if(external_kind==1) external_source=item;
++                m_DZOriginOwner=new Link<EntityAI>(external_source);
++                GetGame().GetInventoryItemSize(item,m_DZBaseW,m_DZBaseH);
++                m_DZOriginW=m_DZBaseW;m_DZOriginH=m_DZBaseH;
++                m_DZOriginX=-1;if(external_kind==1) m_DZOriginX=-2;if(external_kind==4) m_DZOriginX=-4;
++                m_DZOriginY=m_DZOriginX;
++                m_DZDesiredRotated=false;m_DZOriginEquipped=true;m_DZOriginReady=true;
++            }
++        }
++
+ 		// Print("Drag start: ");
+ 		// Print(item);
+ 		// if (item) PrintString( "class InventoryManager >>> Drag() >>> " + ToString(item.GetName()) );
+@@ -174,15 +222,29 @@
+ 		
+ 		SetItemColor(InventoryGrid.ITEM_COLOR_DRAG);
+ 		
+-		int item_w;
+-		int item_h;
+-		GetGame().GetInventoryItemSize(item, item_w, item_h);
++        vector footprint = DZ62_CurrentFootprint(item);
++        int item_w = Math.Round(footprint[1]);
++        int item_h = Math.Round(footprint[2]);
++        Print("[DZ62_UI_DRAG] type=" + item.GetType() + " w=" + item_w + " h=" + item_h);
+ 		
+ 		SetItemSize((item_w * GetNormalItemSize()) + (GRID_CARGO_GAP * (item_w - 1)), (item_h * GetNormalItemSize()) + (GRID_CARGO_GAP * (item_h - 1)));
+ 	}
+ 
+ 	void Drop()
+ 	{
++        InventoryItem reset_item = GetItem();
++        m_DZSpaceUsed = false;
++        if (m_grid && reset_item && m_grid.HasItem(reset_item))
++        {
++            vector reset_data = m_grid.GetItems().Get(reset_item);
++            Widget reset_background = m_grid.GetItemBackground(Math.Round(reset_data[0]));
++            if (reset_background)
++            {
++                ItemPreviewWidget reset_preview = reset_background.FindAnyWidget("Preview");
++                if (reset_preview) reset_preview.SetModelOrientation(DZ62_PreviewRotation(reset_item));
++            }
++        }
++
+ 		// Print("Drag stop");
+ 		if (m_grid && m_drag_item.Ptr()) m_grid.ResetItem(m_drag_item.Ptr());
+ 		
+@@ -733,4 +795,268 @@
+ 			}
+ 		}
+ 	}
++
++    // Read the placed record before falling back to the class dimensions.
++    vector DZ62_CurrentFootprint(InventoryItem item)
++    {
++        if (m_DZSpaceUsed && IsDragging() && item == GetItem())
++        {
++            if (m_DZDesiredRotated) return Vector(0, m_DZBaseH, m_DZBaseW);
++            return Vector(0, m_DZBaseW, m_DZBaseH);
++        }
++        int width = 1, height = 1;
++        if (!item) return Vector(0, width, height);
++        GetGame().GetInventoryItemSize(item, width, height);
++        EntityAI owner = item.GetOwner();
++        if (owner)
++        {
++            Cargo cargo = owner.GetCargo();
++            if (cargo)
++            {
++                int index = cargo.FindEntityInCargo(item);
++                if (index >= 0) cargo.GetItemSize(index, width, height);
++            }
++        }
++        return Vector(0, width, height);
++    }
++
++    vector DZ62_PreviewRotation(InventoryItem item)
++    {
++        if (m_DZSpaceUsed && IsDragging() && item == GetItem())
++        {
++            if (m_DZDesiredRotated) return Vector(0,0,90);
++            return Vector(0,0,0);
++        }
++        if (DZ62_IsStoredRotation(item)) return Vector(0,0,90);
++        return Vector(0,0,0);
++    }
++
++    bool m_DZSpaceUsed;
++    bool m_DZOriginReady;
++    bool m_DZOriginEquipped;
++    bool m_DZDesiredRotated;
++    int m_DZOriginX, m_DZOriginY, m_DZOriginW, m_DZOriginH, m_DZBaseW, m_DZBaseH;
++    autoptr Link<EntityAI> m_DZOriginOwner;
++    int m_DZRequestCounter;
++    int m_DZPendingRequest;
++
++    void DZ62_SpaceMessage(string message)
++    {
++        PlayerBase viewer = (PlayerBase)GetGame().GetPlayer();
++        if (viewer) viewer.MessageStatus(message);
++    }
++
++    bool DZ62_IsStoredRotation(InventoryItem item)
++    {
++        if (!item) return false;
++        EntityAI owner = item.GetOwner();
++        if (!owner || !owner.GetCargo()) return false;
++        Cargo cargo = owner.GetCargo();
++        int index = cargo.FindEntityInCargo(item);
++        if (index < 0) return false;
++        int base_w, base_h, actual_w, actual_h;
++        GetGame().GetInventoryItemSize(item, base_w, base_h);
++        cargo.GetItemSize(index, actual_w, actual_h);
++        return base_w != base_h && actual_w == base_h && actual_h == base_w;
++    }
++
++    bool DZ62_RestrictDrop()
++    {
++        return IsDragging() && (m_DZSpaceUsed || DZ62_IsStoredRotation(GetItem()));
++    }
++
++    bool DZ62_CanFitOriginal(int width, int height)
++    {
++        if (!m_DZOriginOwner || !m_DZOriginOwner.Ptr()) return false;
++        Cargo cargo = m_DZOriginOwner.Ptr().GetCargo();
++        if (!cargo || m_DZOriginX + width > cargo.GetWidth() || m_DZOriginY + height > cargo.GetHeight()) return false;
++        int own_index = cargo.FindEntityInCargo(GetItem());
++        if (own_index < 0) return false;
++        for (int i = 0; i < cargo.GetItemCount(); i++)
++        {
++            if (i == own_index) continue;
++            int x, y, w, h;
++            cargo.GetItemPos(i, x, y); cargo.GetItemSize(i, w, h);
++            if (m_DZOriginX < x+w && m_DZOriginX+width > x && m_DZOriginY < y+h && m_DZOriginY+height > y) return false;
++        }
++        return true;
++    }
++
++    void DZ62_ToggleSpace()
++    {
++        if (!IsDragging() || !GetItem()) return;
++        if (m_DZPendingRequest > 0) { DZ62_SpaceMessage("Aguarde a confirmacao do servidor."); return; }
++        if (!m_DZOriginReady || !m_DZOriginOwner || !m_DZOriginOwner.Ptr() || (!m_DZOriginEquipped && !DZ62_AccessibleCargo(m_DZOriginOwner.Ptr())))
++        { DZ62_SpaceMessage("Arraste um item do equipamento, maos, proximidade ou cargo acessivel."); return; }
++        if (m_DZBaseW == m_DZBaseH || m_DZBaseW < 1 || m_DZBaseH < 1 || m_DZBaseW > 255 || m_DZBaseH > 255)
++        { DZ62_SpaceMessage("Este teste de giro usa itens retangulares."); return; }
++        m_DZSpaceUsed = true;
++        m_DZDesiredRotated = !m_DZDesiredRotated;
++        vector wanted = DZ62_CurrentFootprint(GetItem());
++        int wanted_w = Math.Round(wanted[1]), wanted_h = Math.Round(wanted[2]);
++        SetItemSize((wanted_w * GetNormalItemSize()) + (GRID_CARGO_GAP * (wanted_w - 1)), (wanted_h * GetNormalItemSize()) + (GRID_CARGO_GAP * (wanted_h - 1)));
++        if (m_grid && m_grid.HasItem(GetItem()))
++        {
++            vector data = m_grid.GetItems().Get(GetItem());
++            Widget background = m_grid.GetItemBackground(Math.Round(data[0]));
++            if (background)
++            {
++                ItemPreviewWidget preview = background.FindAnyWidget("Preview");
++                if (preview) preview.SetModelOrientation(DZ62_PreviewRotation(GetItem()));
++            }
++        }
++        if (DZ62_CanFitOriginal(wanted_w, wanted_h)) SetItemColor(InventoryGrid.ITEM_COLOR_GOOD);
++        else SetItemColor(InventoryGrid.ITEM_COLOR_WRONG);
++        Print("[DZ62_SPACE_PREVIEW] type=" + GetItem().GetType() + " w=" + wanted_w + " h=" + wanted_h);
++    }
++
++    bool DZ62_OriginalDrop(EntityAI target, InventoryGrid grid, int row, int col, bool testOnly)
++    {
++        if (!m_DZOriginReady || !m_DZOriginOwner || !GetItem() || !target || grid.IsIcon() || !DZ62_AccessibleCargo(target) || m_DZPendingRequest > 0)
++        { SetItemColor(InventoryGrid.ITEM_COLOR_WRONG); return false; }
++        if(DZ62_CargoCycle(target,GetItem()))
++        {
++            SetItemColor(InventoryGrid.ITEM_COLOR_WRONG);
++            if(!testOnly) DZ62_SpaceMessage("Um recipiente nao pode entrar dentro de si mesmo ou de seus itens.");
++            return false;
++        }
++        vector wanted = DZ62_CurrentFootprint(GetItem());
++        int width = Math.Round(wanted[1]), height = Math.Round(wanted[2]);
++        if (!DZ62_FitDestination(target,GetItem(),col,row,width,height))
++        { SetItemColor(InventoryGrid.ITEM_COLOR_WRONG); return false; }
++        SetItemColor(InventoryGrid.ITEM_COLOR_GOOD);
++        if (!testOnly)
++        {
++            int hint_status=-239;
++            if(m_DZOriginEquipped)
++            {
++                if(!DZ62_ExternalSourceValid(GetItem(),m_DZOriginOwner.Ptr(),m_DZOriginX)) return false;
++                if(target.CanAddEntityInCargoEx(GetItem(),-620062,1342177280 | (height<<20) | (width<<12))) hint_status=0;
++            }
++            else
++            {
++                Cargo hint_cargo=m_DZOriginOwner.Ptr().GetCargo();
++                int hint_index=hint_cargo.FindEntityInCargo(GetItem());
++                if(hint_index>=0) hint_status=hint_cargo.Grid2Index(1342177280 | (height<<20) | (width<<12) | hint_index,-620062);
++            }
++            if(hint_status!=0) {SetItemColor(InventoryGrid.ITEM_COLOR_WRONG);DZ62_SpaceMessage("Nao foi possivel preparar a orientacao para sincronizar.");return false;}
++            if (m_DZRequestCounter < GetGame().GetTime()) m_DZRequestCounter = GetGame().GetTime();
++            m_DZRequestCounter++;
++            m_DZPendingRequest = m_DZRequestCounter;
++            autoptr Param6<EntityAI,EntityAI,vector,vector,int,bool> request = new Param6<EntityAI,EntityAI,vector,vector,int,bool>(GetItem(),m_DZOriginOwner.Ptr(),Vector(m_DZOriginX,m_DZOriginY,m_DZOriginW+256*m_DZOriginH),Vector(col,row,0),m_DZPendingRequest,m_DZDesiredRotated);
++            GetGame().RPCSingleParam(target,620068,request);
++            Print("[DZ62_MOVE_REQUEST] id=" + m_DZPendingRequest + " type=" + GetItem().GetType() + " x=" + col + " y=" + row + " w=" + width + " h=" + height);
++        }
++        return true;
++    }
++
++    void DZ62_SpaceReply(int request, int status, int width, int height)
++    {
++        if (request != m_DZPendingRequest) return;
++        m_DZPendingRequest = 0;
++        Print("[DZ62_SPACE_REPLY] id=" + request + " status=" + status + " w=" + width + " h=" + height);
++        if (status == 0 || status == 1) DZ62_SpaceMessage("Servidor confirmou posicao e giro: " + width + "x" + height + ".");
++        else if(status==-241) DZ62_SpaceMessage("Destino invalido: o recipiente nao pode conter a si mesmo.");
++        else if(status==-239) DZ62_SpaceMessage("Servidor aceitou; sincronizacao local ainda pendente. Reabra o inventario.");
++        else DZ62_SpaceMessage("O servidor recusou o giro. O item continua na origem.");
++    }
++
++    bool DZ62_ExternalSourceValid(EntityAI item,EntityAI source,int kind)
++    {
++        Man actor=GetGame().GetPlayer();if(!item || !source || !actor) return false;
++        if(kind==-1) return source==actor && item.GetOwner()==actor && actor.HasAttachment(item);
++        if(kind==-4) return source==actor && actor.GetEntityInHands()==item;
++        if(kind==-2) return source==item && !item.GetOwner() && vector.Distance(actor.GetPosition(),item.GetPosition())<=3;
++        return false;
++    }
++
++    bool m_DZHandsPending;
++    bool DZ62_ReequipDrop(EntityAI actor,bool testOnly,bool toHands=false,InventoryItem selected=NULL)
++    {
++        InventoryItem item=selected;if(!item) item=GetItem();
++        if((!selected && !IsDragging()) || !item || !actor || actor!=GetGame().GetPlayer() || m_DZPendingRequest>0 || !item.CanRemoveEntity()) return false;
++        EntityAI owner=item.GetOwner();
++        int slot=item.GetSlotId();
++        bool placement_allowed=false;
++        if(toHands && actor.IsInherited(Man))
++        {
++            Man holder=(Man)actor;slot=-1;
++            placement_allowed=!holder.GetEntityInHands() && holder.CanAddEntityInHands(item);
++        }
++        else placement_allowed=slot>=0 && slot<=65535 && actor.CanAddAttachmentEx(item,slot);
++        if(!owner || !owner.GetCargo() || !DZ62_AccessibleCargo(owner) || !placement_allowed) {SetItemColor(InventoryGrid.ITEM_COLOR_WRONG);return false;}
++        Cargo cargo=owner.GetCargo();int index=cargo.FindEntityInCargo(item);
++        if(index<0) return false;
++        SetItemColor(InventoryGrid.ITEM_COLOR_GOOD);
++        if(testOnly) return true;
++        int x,y,w,h,base_w,base_h;cargo.GetItemPos(index,x,y);cargo.GetItemSize(index,w,h);GetGame().GetInventoryItemSize(item,base_w,base_h);
++        if(cargo.Grid2Index(1342177280 | (base_h<<20) | (base_w<<12) | index,-620062)!=0) return false;
++        if(toHands)
++        {
++            int armed=cargo.Grid2Index(536870912 | (h<<20) | (w<<12) | index,-620062);
++            int begin_operation=9;begin_operation=begin_operation<<28;
++            if(armed!=0 || !actor.CanAddEntityInCargoEx(item,-620062,begin_operation)) return false;
++        }
++        if(m_DZRequestCounter<GetGame().GetTime()) m_DZRequestCounter=GetGame().GetTime();
++        m_DZRequestCounter++;m_DZPendingRequest=m_DZRequestCounter;m_DZHandsPending=toHands;
++        GetGame().RPCSingleParam(owner,620071,new Param5<EntityAI,EntityAI,vector,int,int>(item,actor,Vector(x,y,w+256*h),slot,m_DZPendingRequest));
++        Print("[DZ62_REEQUIP_REQUEST] id="+m_DZPendingRequest+" type="+item.GetType()+" slot="+slot);
++        return true;
++    }
++    void DZ62_ReequipReply(int request,int status)
++    {
++        if(request!=m_DZPendingRequest) return;
++        m_DZPendingRequest=0;
++        Print("[DZ62_REEQUIP_REPLY] id="+request+" status="+status);
++        if(status==0 || status==1)
++        {
++            if(m_DZHandsPending) DZ62_SpaceMessage("Servidor confirmou o item nas maos.");
++            else DZ62_SpaceMessage("Servidor confirmou o equipamento.");
++        }
++        else if(m_DZHandsPending && (status==-255 || status==-254)) DZ62_SpaceMessage("A transferencia para as maos ainda nao foi confirmada. Confira o inventario.");
++        else if(m_DZHandsPending) DZ62_SpaceMessage("Nao foi possivel levar o item as maos; confira se estao livres.");
++        else DZ62_SpaceMessage("O servidor recusou o equipamento; confira o slot de destino.");
++        m_DZHandsPending=false;
++    }
++
++    void DZ62_MenuClosed()
++    {
++        m_DZPendingRequest=0;
++    }
++
++    bool DZ62_AccessibleCargo(EntityAI target)
++    {
++        Man viewer = GetGame().GetPlayer();
++        if (!viewer || !target || !target.GetCargo()) return false;
++        Man owner = target.GetOwnerPlayer();
++        if (owner) return owner == viewer;
++        return vector.Distance(viewer.GetPosition(),target.GetPosition()) <= 3;
++    }
++    bool DZ62_CargoCycle(EntityAI target,EntityAI item)
++    {
++        if(!target || !item) return true;
++        EntityAI ancestor=target;
++        for(int depth=0;depth<128;depth++)
++        {
++            if(ancestor==item) return true;
++            if(!ancestor) return false;
++            ancestor=ancestor.GetOwner();
++        }
++        return true;
++    }
++
++    bool DZ62_FitDestination(EntityAI target, EntityAI item, int x, int y, int width, int height)
++    {
++        if(DZ62_CargoCycle(target,item)) return false;
++        Cargo cargo = target.GetCargo();
++        if (!cargo || x < 0 || y < 0 || width < 1 || height < 1 || x+width > cargo.GetWidth() || y+height > cargo.GetHeight()) return false;
++        for (int i=0;i<cargo.GetItemCount();i++)
++        {
++            if (cargo.GetItem(i)==item) continue;
++            int rx,ry,rw,rh;
++            cargo.GetItemPos(i,rx,ry); cargo.GetItemSize(i,rw,rh);
++            if (x<rx+rw && x+width>rx && y<ry+rh && y+height>ry) return false;
++        }
++        return true;
++    }
+ }

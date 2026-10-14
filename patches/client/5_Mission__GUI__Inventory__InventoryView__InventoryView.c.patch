@@ -1,0 +1,39 @@
+--- a/scripts/5_Mission/GUI/Inventory/InventoryView/InventoryView.c
++++ b/scripts/5_Mission/GUI/Inventory/InventoryView/InventoryView.c
+@@ -729,7 +729,13 @@
+ 		int index_from, index_to, flags;
+ 		vector data;
+ 		
+-		if (manager.IsDragging() == false || dragged_item == NULL) return false;	
++		if (manager.IsDragging() == false || dragged_item == NULL) return false;
++        if (manager.DZ62_RestrictDrop())
++        {
++            if(m_entity.Ptr()==player) return manager.DZ62_ReequipDrop(player,testOnly);
++            return manager.DZ62_OriginalDrop(m_entity.Ptr(), grid, row, col, testOnly);
++        }
++	
+ 		
+ 		if (dragged_item && dragged_item.CanRemoveEntity() == false)
+ 		{
+@@ -1101,7 +1107,9 @@
+ 		
+ 		if (grid != m_container_icon_grid) 
+ 		{
+-			GetGame().GetInventoryItemSize(item, w, h);
++			vector footprint = InventoryManager.GetInstance().DZ62_CurrentFootprint(item);
++            w = Math.Round(footprint[1]);
++            h = Math.Round(footprint[2]);
+ 		}
+ 		
+ 		return Vector(0, w, h);
+@@ -1222,4 +1230,10 @@
+ 		return true;
+ 	}
+ 	
++
++    vector GetItemRotation(InventoryGrid grid, InventoryItem item)
++    {
++        if (grid.IsIcon()) return Vector(0,0,0);
++        return InventoryManager.GetInstance().DZ62_PreviewRotation(item);
++    }
+ }

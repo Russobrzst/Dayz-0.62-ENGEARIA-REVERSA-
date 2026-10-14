@@ -1,0 +1,24 @@
+--- a/scripts/3_Game/GUI/InventoryGrid.c
++++ b/scripts/3_Game/GUI/InventoryGrid.c
+@@ -24,6 +24,7 @@
+ 	{
+ 		return Vector(0, 1, 1);
+ 	}
++	vector GetItemRotation(InventoryGrid grid, InventoryItem item) { return Vector(0,0,0); }
+ 	string GetItemQuantityText( InventoryItem item );
+ 	int HasItemQuantity( InventoryItem item );
+ 	float GetItemQuantity( InventoryItem item );
+@@ -779,7 +780,12 @@
+ 				
+ 		ItemPreviewWidget item_preview = item_w.FindAnyWidget("Preview");
+ 		item_preview.SetItem(item);
+-		item_preview.SetModelOrientation( rotation );
++        vector model_rotation = rotation;
++        if (m_controller) model_rotation = model_rotation + m_controller.GetItemRotation(this, item);
++        item_preview.SetModelOrientation(model_rotation);
++        float drawn_width, drawn_height;
++        item_w_bck.GetSize(drawn_width, drawn_height);
++        Print("[DZ62_UI_GRID] type=" + item.GetType() + " w=" + width + " h=" + height + " pixels_w=" + drawn_width + " pixels_h=" + drawn_height + " model_roll=" + model_rotation[2]);
+ 		item_preview.SetCloseup(IsIcon());
+ 
+ 		Widget quantity_stack_panel = item_w.FindAnyWidget("QuantityStackPanel");

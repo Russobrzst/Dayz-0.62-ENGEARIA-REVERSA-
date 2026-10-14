@@ -1,0 +1,13 @@
+--- a/scripts/5_Mission/GUI/Inventory/InventoryView/InventoryViewGrid.c
++++ b/scripts/5_Mission/GUI/Inventory/InventoryView/InventoryViewGrid.c
+@@ -278,7 +278,9 @@
+ 		
+ 		if (grid != m_attachment_grid) 
+ 		{
+-			GetGame().GetInventoryItemSize(item, w, h);
++			vector footprint = InventoryManager.GetInstance().DZ62_CurrentFootprint(item);
++            w = Math.Round(footprint[1]);
++            h = Math.Round(footprint[2]);
+ 		}
+ 		
+ 		return Vector(0, w, h);

@@ -1,0 +1,669 @@
+--- a/scripts/4_World/Entities/ItemBase.c
++++ b/scripts/4_World/Entities/ItemBase.c
+@@ -3,6 +3,18 @@
+ 
+ class ItemBase extends InventoryItem
+ {
++    // DZ62 debug trial: state belongs to this fixed container, not arbitrary moved items.
++    int m_DZ62Revision;
++    int m_DZ62ReceivedRevision = -1;
++    int m_DZ62ClientAckRevision = -1;
++    int m_DZ62RetryCount;
++    autoptr array<string> m_DZ62Types;
++    autoptr array<int> m_DZ62X;
++    autoptr array<int> m_DZ62Y;
++    autoptr array<int> m_DZ62W;
++    autoptr array<int> m_DZ62H;
++    autoptr Timer m_DZ62RetryTimer;
++
+ 	
+ 	private float	m_Quantity;
+ 	private float	m_QuantityMax;
+@@ -1089,8 +1101,100 @@
+ 
+ 	void OnRPC(int rpc_type,ParamsReadContext  ctx) 
+ 	{
++        if(rpc_type==620071)
++        {
++            if(GetGame().IsServer())
++            {
++                autoptr Param5<EntityAI,EntityAI,vector,int,int> equip_req=new Param5<EntityAI,EntityAI,vector,int,int>(NULL,NULL,Vector(0,0,0),-1,0);
++                if(ctx.Read(equip_req)) GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Call(this,"DZ62_ReequipServer",new Param5<EntityAI,EntityAI,vector,int,int>(equip_req.param1,equip_req.param2,equip_req.param3,equip_req.param4,equip_req.param5));
++            }
++            return;
++        }
++        if(rpc_type==620072)
++        {
++            if(!GetGame().IsServer())
++            {
++                autoptr Param5<EntityAI,EntityAI,vector,int,int> equip_commit=new Param5<EntityAI,EntityAI,vector,int,int>(NULL,NULL,Vector(0,0,0),0,-1);
++                if(ctx.Read(equip_commit)) GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Call(this,"DZ62_ReequipClient",new Param5<EntityAI,EntityAI,vector,int,int>(equip_commit.param1,equip_commit.param2,equip_commit.param3,equip_commit.param4,equip_commit.param5));
++            }
++            return;
++        }
++        if(rpc_type==620073)
++        {
++            if(GetGame().IsServer())
++            {
++                autoptr Param3<int,int,string> equip_ack=new Param3<int,int,string>(0,-1,"");
++                if(ctx.Read(equip_ack)) Print("[DZ62_REEQUIP_ACK] id="+equip_ack.param1+" client_status="+equip_ack.param2+" type="+equip_ack.param3);
++            }
++            return;
++        }
++        if (rpc_type == 620068)
++        {
++            if (GetGame().IsServer())
++            {
++                autoptr Param6<EntityAI,EntityAI,vector,vector,int,bool> move_request = new Param6<EntityAI,EntityAI,vector,vector,int,bool>(NULL,NULL,Vector(0,0,0),Vector(0,0,0),0,false);
++                if (ctx.Read(move_request)) GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Call(this,"DZ62_MoveServer",new Param6<EntityAI,EntityAI,vector,vector,int,bool>(move_request.param1,move_request.param2,move_request.param3,move_request.param4,move_request.param5,move_request.param6));
++            }
++            return;
++        }
++        if (rpc_type == 620069)
++        {
++            if (!GetGame().IsServer())
++            {
++                autoptr Param6<EntityAI,EntityAI,vector,vector,int,int> move_commit = new Param6<EntityAI,EntityAI,vector,vector,int,int>(NULL,NULL,Vector(0,0,0),Vector(0,0,0),0,-1);
++                if (ctx.Read(move_commit)) GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Call(this,"DZ62_MoveClient",new Param6<EntityAI,EntityAI,vector,vector,int,int>(move_commit.param1,move_commit.param2,move_commit.param3,move_commit.param4,move_commit.param5,move_commit.param6));
++            }
++            return;
++        }
++        if (rpc_type == 620070)
++        {
++            if (GetGame().IsServer())
++            {
++                autoptr Param6<int,int,EntityAI,vector,vector,string> move_ack = new Param6<int,int,EntityAI,vector,vector,string>(0,-1,NULL,Vector(0,0,0),Vector(0,0,0),"");
++                if (ctx.Read(move_ack)) Print("[DZ62_MOVE_ACK] id=" + move_ack.param1 + " client_status=" + move_ack.param2 + " type=" + move_ack.param6 + " xy=" + move_ack.param4.ToString() + " wh=" + move_ack.param5.ToString());
++            }
++            return;
++        }
++
+ 		//Debug.Log("OnRPC called");
+ 		super.OnRPC(rpc_type,ctx);
++        // Debug readiness acknowledgement only; never selects an item or changes dimensions.
++        if (rpc_type == 620065)
++        {
++            if (GetGame().IsServer())
++            {
++                autoptr Param5<string,int,int,int,bool> request = new Param5<string,int,int,int,bool>("",0,0,0,false);
++                if (ctx.Read(request)) GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Call(this,"DZ62_ApplySpaceRequest",new Param5<string,int,int,int,bool>(request.param1,request.param2,request.param3,request.param4,request.param5));
++            }
++            return;
++        }
++        if (rpc_type == 620067)
++        {
++            if (!GetGame().IsServer())
++            {
++                autoptr Param4<int,int,int,int> reply = new Param4<int,int,int,int>(0,-1,0,0);
++                if (ctx.Read(reply))
++                {
++                    UIScriptedMenu reply_menu = GetGame().GetUIManager().FindMenu(MENU_INVENTORY);
++                    if (reply_menu) GetGame().GetCallQueue(CALL_CATEGORY_GUI).Call(reply_menu,"DZ62_OnSpaceReply",new Param4<int,int,int,int>(reply.param1,reply.param2,reply.param3,reply.param4));
++                }
++            }
++            return;
++        }
++        if (rpc_type == 620064)
++        {
++            if (GetGame().IsServer() && m_DZ62Types && m_DZ62Types.Count() > 0)
++            {
++                autoptr Param1<int> ack = new Param1<int>(-1);
++                if (ctx.Read(ack) && ack.param1 == m_DZ62Revision)
++                {
++                    m_DZ62ClientAckRevision = ack.param1;
++                    Print("[DZ62_ACK] revision=" + ack.param1);
++                }
++            }
++            return;
++        }
++
+ 		if( rpc_type == RPC_ITEM_SPLIT ) SplitItem();
+ 		if( rpc_type == RPC_ITEM_COMBINE ) 
+ 		{
+@@ -1589,6 +1693,8 @@
+ 		{
+ 			SyncVariables(ctx);
+ 		}
++	
++        DZ62_WriteRotationSnapshot(ctx);
+ 	}
+ 	//----------------------------------------------------------------
+ 	void OnSynchronized(ParamsReadContext ctx)
+@@ -1599,6 +1705,8 @@
+ 		{
+ 			OnSyncVariables(ctx);
+ 		}
++	
++        DZ62_ReadRotationSnapshot(ctx);
+ 	}
+ 	//-------------------------	Quantity
+ 	//----------------------------------------------------------------
+@@ -2083,5 +2191,528 @@
+ 		AddQuantity2(-amount, false);
+ 		ProcessNutritions(player,amount);
+ 	}
++
++    void DZ62_InitRotationLists()
++    {
++        if (m_DZ62Types) return;
++        m_DZ62Types = new array<string>;
++        m_DZ62X = new array<int>;
++        m_DZ62Y = new array<int>;
++        m_DZ62W = new array<int>;
++        m_DZ62H = new array<int>;
++    }
++
++    int DZ62_SetRotationExisting(int index, bool rotated)
++    {
++        if (!GetGame().IsServer()) return -201;
++        Cargo cargo = GetCargo();
++        if (!cargo || index < 0 || index >= cargo.GetItemCount() || index > 4095) return -202;
++        if (cargo.Grid2Index(0, -620062) != 620063) return -203;
++        EntityAI child = cargo.GetItem(index);
++        int width, height;
++        GetGame().GetInventoryItemSize(child, width, height);
++        if (rotated) { int swap = width; width = height; height = swap; }
++        if (width < 1 || height < 1 || width > 255 || height > 255) return -204;
++        int x, y;
++        cargo.GetItemPos(index, x, y);
++        DZ62_InitRotationLists();
++        string item_type = child.GetType();
++        int slot = -1;
++        for (int i = 0; i < m_DZ62Types.Count(); i++)
++        {
++            if (m_DZ62Types.Get(i) == item_type && m_DZ62X.Get(i) == x && m_DZ62Y.Get(i) == y) slot = i;
++        }
++        if (slot == -1 && m_DZ62Types.Count() >= 16) return -205;
++        int result = cargo.Grid2Index(268435456 | (height << 20) | (width << 12) | index, -620062);
++        if (result != 0 && result != 1) return result;
++        if (slot == -1)
++        {
++            // This debug trial supports one stable container entry; enforce a small bound.
++            m_DZ62Types.Insert(item_type); m_DZ62X.Insert(x); m_DZ62Y.Insert(y);
++            m_DZ62W.Insert(width); m_DZ62H.Insert(height);
++        }
++        else { m_DZ62W.Set(slot, width); m_DZ62H.Set(slot, height); }
++        m_DZ62Revision++;
++        SetSynchDirty(); // Dirty the container whose script payload owns this snapshot.
++        Print("[DZ62_SERVER] revision=" + m_DZ62Revision + " type=" + item_type + " x=" + x + " y=" + y + " w=" + width + " h=" + height);
++        return result;
++    }
++
++    void DZ62_WriteRotationSnapshot(ParamsWriteContext ctx)
++    {
++        int count = 0;
++        if (m_DZ62Types) count = m_DZ62Types.Count();
++        autoptr Param3<int, int, int> header = new Param3<int, int, int>(620063, m_DZ62Revision, count);
++        ctx.Write(header);
++        for (int i = 0; i < count; i++)
++        {
++            autoptr Param5<string, int, int, int, int> row = new Param5<string, int, int, int, int>(m_DZ62Types.Get(i), m_DZ62X.Get(i), m_DZ62Y.Get(i), m_DZ62W.Get(i), m_DZ62H.Get(i));
++            ctx.Write(row);
++        }
++    }
++
++    void DZ62_ReadRotationSnapshot(ParamsReadContext ctx)
++    {
++        autoptr Param3<int, int, int> header = new Param3<int, int, int>(0, 0, 0);
++        if (!ctx.Read(header)) { Print("[DZ62_ERROR] snapshot header read failed"); return; }
++        if (header.param1 != 620063 || header.param3 < 0 || header.param3 > 16)
++        { Print("[DZ62_ERROR] incompatible snapshot protocol"); return; }
++        // Read the entire frame before deciding whether to accept its revision.
++        autoptr array<string> types = new array<string>;
++        autoptr array<int> xs = new array<int>;
++        autoptr array<int> ys = new array<int>;
++        autoptr array<int> widths = new array<int>;
++        autoptr array<int> heights = new array<int>;
++        for (int i = 0; i < header.param3; i++)
++        {
++            autoptr Param5<string, int, int, int, int> row = new Param5<string, int, int, int, int>("", 0, 0, 0, 0);
++            if (!ctx.Read(row)) { Print("[DZ62_ERROR] snapshot row read failed"); return; }
++            if (row.param2 < 0 || row.param3 < 0 || row.param4 < 1 || row.param5 < 1 || row.param4 > 255 || row.param5 > 255)
++            { Print("[DZ62_ERROR] invalid snapshot dimensions"); return; }
++            types.Insert(row.param1); xs.Insert(row.param2); ys.Insert(row.param3);
++            widths.Insert(row.param4); heights.Insert(row.param5);
++        }
++        if (GetGame().IsServer() || header.param2 < m_DZ62ReceivedRevision || header.param3 == 0) return;
++        DZ62_InitRotationLists();
++        m_DZ62Types.Clear(); m_DZ62X.Clear(); m_DZ62Y.Clear(); m_DZ62W.Clear(); m_DZ62H.Clear();
++        for (int k = 0; k < types.Count(); k++)
++        {
++            m_DZ62Types.Insert(types.Get(k)); m_DZ62X.Insert(xs.Get(k)); m_DZ62Y.Insert(ys.Get(k));
++            m_DZ62W.Insert(widths.Get(k)); m_DZ62H.Insert(heights.Get(k));
++        }
++        m_DZ62ReceivedRevision = header.param2;
++        m_DZ62RetryCount = 0;
++        if (!m_DZ62RetryTimer) m_DZ62RetryTimer = new Timer(CALL_CATEGORY_GAMEPLAY);
++        m_DZ62RetryTimer.Stop();
++        m_DZ62RetryTimer.Run(0.25, this, "DZ62_ApplyRotationSnapshot", NULL, true);
++        DZ62_ApplyRotationSnapshot();
++    }
++
++    void DZ62_ApplyRotationSnapshot()
++    {
++        if (GetGame().IsServer()) return;
++        m_DZ62RetryCount++;
++        Cargo cargo = GetCargo();
++        bool complete = cargo != NULL;
++        bool trace = m_DZ62RetryCount == 1 || (m_DZ62RetryCount % 40) == 0;
++        int ping = -999;
++        if (cargo) ping = cargo.Grid2Index(0, -620062);
++        if (cargo && ping == 620063)
++        {
++            for (int i = 0; i < m_DZ62Types.Count(); i++)
++            {
++                int index = -1;
++                for (int j = 0; j < cargo.GetItemCount(); j++)
++                {
++                    int x, y;
++                    cargo.GetItemPos(j, x, y);
++                    if (x == m_DZ62X.Get(i) && y == m_DZ62Y.Get(i) && cargo.GetItem(j).GetType() == m_DZ62Types.Get(i)) index = j;
++                }
++                if (index == -1)
++                {
++                    if (trace) Print("[DZ62_PENDING] missing item type=" + m_DZ62Types.Get(i) + " cargo_count=" + cargo.GetItemCount());
++                    complete = false; continue;
++                }
++                int width = m_DZ62W.Get(i), height = m_DZ62H.Get(i);
++                int result = cargo.Grid2Index(1610612736 | (height << 20) | (width << 12) | index, -620062);
++                if (result != 0 && result != 1)
++                {
++                    if (trace) Print("[DZ62_PENDING] native status=" + result + " revision=" + m_DZ62ReceivedRevision);
++                    complete = false; continue;
++                }
++                int observed_w, observed_h;
++                cargo.GetItemSize(index, observed_w, observed_h);
++                if (observed_w != width || observed_h != height)
++                {
++                    if (trace) Print("[DZ62_PENDING] getter mismatch w=" + observed_w + " h=" + observed_h);
++                    complete = false; continue;
++                }
++                Print("[DZ62_CLIENT] verified revision=" + m_DZ62ReceivedRevision + " type=" + m_DZ62Types.Get(i) + " w=" + observed_w + " h=" + observed_h + " status=" + result);
++            }
++        }
++        else
++        {
++            if (trace) Print("[DZ62_PENDING] cargo binding ping=" + ping);
++            complete = false;
++        }
++        if (complete)
++        {
++            Print("[DZ62_CLIENT] applied revision=" + m_DZ62ReceivedRevision + " entries=" + m_DZ62Types.Count());
++            m_DZ62RetryTimer.Stop();
++            autoptr Param1<int> ack = new Param1<int>(m_DZ62ReceivedRevision);
++            GetGame().RPCSingleParam(this, 620064, ack);
++            UIScriptedMenu menu = GetGame().GetUIManager().FindMenu(MENU_INVENTORY);
++            if (menu) GetGame().GetCallQueue(CALL_CATEGORY_GUI).Call(menu, "PerformRefreshInventory", NULL);
++            PlayerBase viewer = (PlayerBase)GetGame().GetPlayer();
++            if (viewer)
++            {
++
++
++            }
++        }
++        else if (m_DZ62RetryCount >= 480)
++        {
++            Print("[DZ62_ERROR] pending snapshot failed revision=" + m_DZ62ReceivedRevision);
++            m_DZ62RetryTimer.Stop();
++        }
++    }
++
++    void DZ62_SendSpaceReply(int request, int status, int width, int height)
++    {
++        autoptr Param4<int,int,int,int> reply = new Param4<int,int,int,int>(request,status,width,height);
++        GetGame().RPCSingleParam(this,620067,reply);
++        Print("[DZ62_SPACE_SERVER] id=" + request + " status=" + status + " w=" + width + " h=" + height);
++    }
++    void DZ62_ApplySpaceRequest(string type, int x, int y, int request, bool rotated)
++    {
++        if (!GetGame().IsServer()) return;
++        // Local-debug admission only: not a production sender-authentication mechanism.
++        autoptr array<Man> players = new array<Man>;
++        GetGame().GetPlayers(players);
++        if (players.Count() != 1 || GetOwnerPlayer() != players.Get(0)) { DZ62_SendSpaceReply(request,-221,0,0); return; }
++        Cargo cargo = GetCargo();
++        if (!cargo || request <= 0 || type.Length() > 96 || x < 0 || y < 0 || x >= cargo.GetWidth() || y >= cargo.GetHeight())
++        { DZ62_SendSpaceReply(request,-222,0,0); return; }
++        int index = -1;
++        for (int i = 0; i < cargo.GetItemCount(); i++)
++        {
++            int current_x, current_y;
++            cargo.GetItemPos(i,current_x,current_y);
++            if (current_x == x && current_y == y && cargo.GetItem(i).GetType() == type) index = i;
++        }
++        if (index < 0) { DZ62_SendSpaceReply(request,-223,0,0); return; }
++        int status = DZ62_SetRotationExisting(index,rotated);
++        int width, height;
++        cargo.GetItemSize(index,width,height);
++        DZ62_SendSpaceReply(request,status,width,height);
++    }
++
++    bool DZ62_CargoCycle(EntityAI target,EntityAI item)
++    {
++        if(!target || !item) return true;
++        EntityAI ancestor=target;
++        for(int depth=0;depth<128;depth++)
++        {
++            if(ancestor==item) return true;
++            if(!ancestor) return false;
++            ancestor=ancestor.GetOwner();
++        }
++        return true;
++    }
++
++    bool DZ62_MoveAccess(EntityAI target, Man actor)
++    {
++        if (!target || !actor || !target.GetCargo()) return false;
++        Man owner = target.GetOwnerPlayer();
++        if (owner) return owner == actor;
++        return vector.Distance(actor.GetPosition(),target.GetPosition()) <= 3;
++    }
++    int DZ62_MoveNative(EntityAI child, EntityAI source, int x, int y, int width, int height)
++    {
++        if (!child || !source || !GetCargo()) return -231;
++        if(DZ62_CargoCycle(this,child)) return -241;
++        if((child.GetOwner()==source && source.HasAttachment(child)) || DZ62_IsHandsOrigin(source,child) || (source==child && !child.GetOwner()))
++        {
++            if(!CanAddEntityInCargoEx(child,-620062,1879048192 | (height<<20) | (width<<12))) return -240;
++            return GetCargo().Grid2Index(805306368 | (y<<8) | x,-620062);
++        }
++        if(!source.GetCargo()) return -231;
++        Cargo old_cargo = source.GetCargo(); Cargo new_cargo = GetCargo();
++        if (old_cargo.Grid2Index(1073741824,-620062) != 620068) return -232;
++        int index = old_cargo.FindEntityInCargo(child);
++        if (index < 0 || index > 4095 || x<0 || y<0 || x>255 || y>255 || width<1 || height<1 || width>255 || height>255) return -233;
++        int armed = old_cargo.Grid2Index(536870912 | (height<<20) | (width<<12) | index,-620062);
++        if (armed != 0) return armed;
++        return new_cargo.Grid2Index(805306368 | (y<<8) | x,-620062);
++    }
++    void DZ62_MoveSnapshot()
++    {
++        DZ62_InitRotationLists();
++        m_DZ62Types.Clear();m_DZ62X.Clear();m_DZ62Y.Clear();m_DZ62W.Clear();m_DZ62H.Clear();
++        Cargo cargo = GetCargo();
++        if (cargo)
++        {
++            for (int i=0;i<cargo.GetItemCount();i++)
++            {
++                int x,y,w,h;cargo.GetItemPos(i,x,y);cargo.GetItemSize(i,w,h);
++                m_DZ62Types.Insert(cargo.GetItem(i).GetType());m_DZ62X.Insert(x);m_DZ62Y.Insert(y);m_DZ62W.Insert(w);m_DZ62H.Insert(h);
++            }
++        }
++        m_DZ62Revision++;SetSynchDirty();
++    }
++    void DZ62_MoveServer(EntityAI child, EntityAI source, vector expected, vector destination, int request, bool rotated)
++    {
++        if (!GetGame().IsServer()) return;
++        int status=-234,width=0,height=0;
++        int x=Math.Round(destination[0]),y=Math.Round(destination[1]);
++        autoptr array<Man> actors=new array<Man>;
++        GetGame().GetPlayers(actors);
++        if (request>0 && actors.Count()==1 && child && source && !DZ62_CargoCycle(this,child) && DZ62_MoveAccess(this,actors.Get(0)))
++        {
++            bool origin_valid=false;
++            bool equipped_origin=source==actors.Get(0) && child.GetOwner()==source && source.HasAttachment(child) && Math.Round(expected[0])==-1 && Math.Round(expected[1])==-1;
++            bool hands_origin=source==actors.Get(0) && DZ62_IsHandsOrigin(source,child) && Math.Round(expected[0])==-4 && Math.Round(expected[1])==-4;
++            bool ground_origin=source==child && !child.GetOwner() && vector.Distance(actors.Get(0).GetPosition(),child.GetPosition())<=3 && Math.Round(expected[0])==-2 && Math.Round(expected[1])==-2;
++            bool external_origin=equipped_origin || hands_origin || ground_origin;
++            Cargo old_cargo=source.GetCargo();Cargo new_cargo=GetCargo();
++            if(external_origin)
++            {
++                int base_w,base_h;GetGame().GetInventoryItemSize(child,base_w,base_h);
++                origin_valid=base_w+256*base_h==Math.Round(expected[2]);
++            }
++            else if(source.IsInherited(ItemBase) && DZ62_MoveAccess(source,actors.Get(0)) && old_cargo)
++            {
++                int index=old_cargo.FindEntityInCargo(child);
++                if(index>=0 && old_cargo.GetItemCount()<=15)
++                {
++                    int old_x,old_y,old_w,old_h;
++                    old_cargo.GetItemPos(index,old_x,old_y);old_cargo.GetItemSize(index,old_w,old_h);
++                    origin_valid=old_x==Math.Round(expected[0]) && old_y==Math.Round(expected[1]) && old_w+256*old_h==Math.Round(expected[2]);
++                }
++            }
++            if(origin_valid && new_cargo.GetItemCount()<=15)
++            {
++                GetGame().GetInventoryItemSize(child,width,height);
++                if(rotated) {int swap=width;width=height;height=swap;}
++                status=DZ62_MoveNative(child,source,x,y,width,height);
++                if(status==0 || status==1)
++                {
++                    if(!external_origin && source!=this) {ItemBase old_owner=(ItemBase)source;old_owner.DZ62_MoveSnapshot();}
++                    DZ62_MoveSnapshot();child.SetSynchDirty();
++                }
++            }
++            else status=-236;
++        }
++        if(child && DZ62_CargoCycle(this,child)) status=-241;
++        autoptr Param6<EntityAI,EntityAI,vector,vector,int,int> commit=new Param6<EntityAI,EntityAI,vector,vector,int,int>(child,source,Vector(x,y,0),Vector(width,height,0),request,status);
++        GetGame().RPCSingleParam(this,620069,commit);
++        string source_name="";if(source) source_name=source.GetType();
++        Print("[DZ62_MOVE_SERVER] id="+request+" source="+source_name+" target="+GetType()+" status="+status+" x="+x+" y="+y+" w="+width+" h="+height);
++    }
++    autoptr Timer m_DZMoveRetryTimer;
++    int m_DZMoveRetryRequest,m_DZMoveRetryCount,m_DZMoveCompletedRequest;
++    void DZ62_MoveClient(EntityAI child, EntityAI source, vector destination, vector dimensions, int request, int status)
++    {
++        if (GetGame().IsServer() || request==m_DZMoveCompletedRequest) return;
++        if(m_DZMoveRetryRequest!=request)
++        {
++            if(m_DZMoveRetryTimer) m_DZMoveRetryTimer.Stop();
++            m_DZMoveRetryRequest=request;m_DZMoveRetryCount=0;
++        }
++        bool server_accepted=status==0 || status==1;
++        int x=Math.Round(destination[0]),y=Math.Round(destination[1]);
++        int width=Math.Round(dimensions[0]),height=Math.Round(dimensions[1]);
++        if (status==0 || status==1)
++        {
++            status=-237;
++            if (child && GetCargo())
++            {
++                EntityAI actual_owner=child.GetOwner();
++                int placed_index=GetCargo().FindEntityInCargo(child);
++                int placed_x,placed_y;
++                if(placed_index>=0) GetCargo().GetItemPos(placed_index,placed_x,placed_y);
++                if(placed_index>=0 && placed_x==x && placed_y==y && actual_owner==this)
++                    status=GetCargo().Grid2Index(1610612736 | (height<<20) | (width<<12) | placed_index,-620062);
++                else if(actual_owner && (actual_owner.HasAttachment(child) || DZ62_IsHandsOrigin(actual_owner,child)))
++                    status=DZ62_MoveNative(child,actual_owner,x,y,width,height);
++                else if(!actual_owner && source && DZ62_IsHandsOrigin(source,child))
++                    status=DZ62_MoveNative(child,source,x,y,width,height);
++                else if(!actual_owner && source==child)
++                    status=DZ62_MoveNative(child,child,x,y,width,height);
++                else if (actual_owner && actual_owner.GetCargo() && actual_owner.GetCargo().FindEntityInCargo(child)>=0)
++                    status=DZ62_MoveNative(child,actual_owner,x,y,width,height);
++                else if (source && source.GetCargo() && source.GetCargo().FindEntityInCargo(child)>=0)
++                    status=DZ62_MoveNative(child,source,x,y,width,height);
++                if (status==0 || status==1)
++                {
++                    int index=GetCargo().FindEntityInCargo(child);
++                    int actual_x,actual_y,actual_w,actual_h;
++                    if(index>=0) {GetCargo().GetItemPos(index,actual_x,actual_y);GetCargo().GetItemSize(index,actual_w,actual_h);}
++                    if(index<0 || child.GetOwner()!=this || actual_x!=x || actual_y!=y || actual_w!=width || actual_h!=height) status=-238;
++                }
++            }
++        }
++        if(server_accepted && status!=0 && status!=1)
++        {
++            if(m_DZMoveRetryCount<40)
++            {
++                m_DZMoveRetryCount++;
++                Print("[DZ62_MOVE_WAIT] id="+request+" attempt="+m_DZMoveRetryCount+" local_status="+status);
++                if(!m_DZMoveRetryTimer) m_DZMoveRetryTimer=new Timer(CALL_CATEGORY_GAMEPLAY);
++                m_DZMoveRetryTimer.Run(0.05,this,"DZ62_MoveClient",new Param6<EntityAI,EntityAI,vector,vector,int,int>(child,source,destination,dimensions,request,0),false);
++                return;
++            }
++            // The server accepted. Never undo its orientation because a local mirror timed out.
++            status=-239;
++        }
++        if(m_DZMoveRetryTimer) m_DZMoveRetryTimer.Stop();
++        m_DZMoveCompletedRequest=request;
++        Print("[DZ62_MOVE_CLIENT] id="+request+" status="+status+" x="+x+" y="+y+" w="+width+" h="+height);
++        if(!server_accepted && status!=0 && status!=1 && child && child.GetOwner() && child.GetOwner().GetCargo())
++        {
++            Cargo rollback_cargo=child.GetOwner().GetCargo();
++            int rollback_index=rollback_cargo.FindEntityInCargo(child);
++            if(rollback_index>=0)
++            {
++                int rollback_w,rollback_h;rollback_cargo.GetItemSize(rollback_index,rollback_w,rollback_h);
++                rollback_cargo.Grid2Index(1342177280 | (rollback_h<<20) | (rollback_w<<12) | rollback_index,-620062);
++            }
++        }
++        if(!server_accepted && status!=0 && status!=1 && child && ((child.GetOwner() && (child.GetOwner().HasAttachment(child) || DZ62_IsHandsOrigin(child.GetOwner(),child))) || !child.GetOwner()))
++        {
++            int reset_w,reset_h;GetGame().GetInventoryItemSize(child,reset_w,reset_h);
++            CanAddEntityInCargoEx(child,-620062,1342177280 | (reset_h<<20) | (reset_w<<12));
++        }
++        string item_type="";if(child) item_type=child.GetType();
++        autoptr Param6<int,int,EntityAI,vector,vector,string> ack=new Param6<int,int,EntityAI,vector,vector,string>(request,status,child,Vector(x,y,0),Vector(width,height,0),item_type);
++        GetGame().RPCSingleParam(this,620070,ack);
++        UIScriptedMenu menu=GetGame().GetUIManager().FindMenu(MENU_INVENTORY);
++        if(menu) GetGame().GetCallQueue(CALL_CATEGORY_GUI).Call(menu,"DZ62_OnSpaceReply",new Param4<int,int,int,int>(request,status,width,height));
++    }
++    autoptr Timer m_DZEquipRetryTimer;
++    int m_DZEquipRetryRequest,m_DZEquipRetryCount,m_DZEquipCompletedRequest;
++    int DZ62_ReequipNative(EntityAI actor,EntityAI child,int slot)
++    {
++        Cargo cargo=GetCargo();if(!cargo || !actor || !child) return -250;
++        int index=cargo.FindEntityInCargo(child);if(index<0 || index>4095) return -251;
++        int w,h;cargo.GetItemSize(index,w,h);
++        int armed=cargo.Grid2Index(536870912 | (h<<20) | (w<<12) | index,-620062);
++        if(armed!=0) return armed;
++        int operation=8;if(slot==-1) operation=9;operation=operation<<28;
++        int payload=operation;if(slot>=0) payload=operation | slot;
++        if(actor.CanAddEntityInCargoEx(child,-620062,payload)) return 0;
++        return -252;
++    }
++    bool DZ62_ActorPlacement(EntityAI actor,EntityAI child,int slot,bool checkOnly)
++    {
++        if(!actor || !child) return false;
++        if(slot==-1)
++        {
++            if(!actor.IsInherited(Man)) return false;
++            Man holder=(Man)actor;
++            if(checkOnly) return !holder.GetEntityInHands() && holder.CanAddEntityInHands(child);
++            return holder.GetEntityInHands()==child;
++        }
++        if(slot<0 || slot>65535 || slot!=child.GetSlotId()) return false;
++        if(checkOnly) return actor.CanAddAttachmentEx(child,slot);
++        return child.GetOwner()==actor && actor.HasAttachmentEx(child,slot);
++    }
++
++    void DZ62_ReequipServer(EntityAI child,EntityAI actor,vector expected,int slot,int request)
++    {
++        if(!GetGame().IsServer()) return;
++        int status=-253,w=0,h=0;
++        autoptr array<Man> actors=new array<Man>;GetGame().GetPlayers(actors);
++        Cargo cargo=GetCargo();
++        if(request>0 && actors.Count()==1 && actor==actors.Get(0) && child && cargo && DZ62_MoveAccess(this,actors.Get(0)) && child.GetOwner()==this && DZ62_ActorPlacement(actor,child,slot,true))
++        {
++            int index=cargo.FindEntityInCargo(child);
++            if(index>=0)
++            {
++                int x,y,old_w,old_h;cargo.GetItemPos(index,x,y);cargo.GetItemSize(index,old_w,old_h);
++                if(x==Math.Round(expected[0]) && y==Math.Round(expected[1]) && old_w+256*old_h==Math.Round(expected[2]))
++                {
++                    status=DZ62_ReequipNative(actor,child,slot);
++                    if(status==0 && slot==-1)
++                    {
++                        GetGame().GetInventoryItemSize(child,w,h);
++                        Man holder=(Man)actor;
++                        bool queued=holder.TakeEntityToHands(child);
++                        Print("[DZ62_HANDS_PENDING] id="+request+" stock_result="+queued);
++                        if(!m_DZHandsServerTimer) m_DZHandsServerTimer=new Timer(CALL_CATEGORY_GAMEPLAY);
++                        m_DZHandsServerTimer.Run(0.05,this,"DZ62_FinishHandsServer",new Param5<EntityAI,EntityAI,vector,int,int>(child,actor,Vector(-1,w,h),request,0),false);
++                        return;
++                    }
++                    if(status==0 && !DZ62_ActorPlacement(actor,child,slot,false)) status=-254;
++                    if(status==0) {DZ62_MoveSnapshot();actor.SetSynchDirty();child.SetSynchDirty();}
++                }
++            }
++            GetGame().GetInventoryItemSize(child,w,h);
++        }
++        GetGame().RPCSingleParam(this,620072,new Param5<EntityAI,EntityAI,vector,int,int>(child,actor,Vector(slot,w,h),request,status));
++        Print("[DZ62_REEQUIP_SERVER] id="+request+" slot="+slot+" status="+status);
++    }
++    autoptr Timer m_DZHandsServerTimer;
++    void DZ62_FinishHandsServer(EntityAI child,EntityAI actor,vector result,int request,int attempt)
++    {
++        if(!GetGame().IsServer()) return;
++        int operation=10;operation=operation<<28;
++        int status=-255;
++        if(child && actor && DZ62_ActorPlacement(actor,child,-1,false) && actor.CanAddEntityInCargoEx(child,-620062,operation))
++        {
++            status=0;DZ62_MoveSnapshot();actor.SetSynchDirty();child.SetSynchDirty();
++        }
++        else if(attempt<100)
++        {
++            m_DZHandsServerTimer.Run(0.05,this,"DZ62_FinishHandsServer",new Param5<EntityAI,EntityAI,vector,int,int>(child,actor,result,request,attempt+1),false);
++            return;
++        }
++        else if(child && actor)
++        {
++            operation=11;operation=operation<<28;
++            actor.CanAddEntityInCargoEx(child,-620062,operation);
++        }
++        GetGame().RPCSingleParam(this,620072,new Param5<EntityAI,EntityAI,vector,int,int>(child,actor,result,request,status));
++        Print("[DZ62_HANDS_SERVER] id="+request+" attempts="+attempt+" status="+status);
++    }
++
++    void DZ62_ReequipClient(EntityAI child,EntityAI actor,vector result,int request,int status)
++    {
++        if(GetGame().IsServer() || request==m_DZEquipCompletedRequest) return;
++        if(m_DZEquipRetryRequest!=request) {m_DZEquipRetryRequest=request;m_DZEquipRetryCount=0;}
++        int slot=Math.Round(result[0]);
++        bool server_accepted=status==0 || status==1;
++        if(server_accepted)
++        {
++            status=-254;
++            if(child && actor)
++            {
++                if(slot==-1)
++                {
++                    int finish_operation=10;finish_operation=finish_operation<<28;
++                    if(DZ62_ActorPlacement(actor,child,-1,false) && actor.CanAddEntityInCargoEx(child,-620062,finish_operation)) status=1;
++                }
++                else if(DZ62_ActorPlacement(actor,child,slot,false)) status=1;
++                else if(slot!=-1 && child.GetOwner()==this && GetCargo() && GetCargo().FindEntityInCargo(child)>=0 && DZ62_ActorPlacement(actor,child,slot,true)) status=DZ62_ReequipNative(actor,child,slot);
++                if((status==0 || status==1) && !DZ62_ActorPlacement(actor,child,slot,false)) status=-254;
++            }
++            if(status!=0 && status!=1 && m_DZEquipRetryCount<40)
++            {
++                m_DZEquipRetryCount++;
++                if(!m_DZEquipRetryTimer) m_DZEquipRetryTimer=new Timer(CALL_CATEGORY_GAMEPLAY);
++                m_DZEquipRetryTimer.Run(0.05,this,"DZ62_ReequipClient",new Param5<EntityAI,EntityAI,vector,int,int>(child,actor,result,request,0),false);
++                return;
++            }
++        }
++        if(slot==-1 && child && actor && !server_accepted)
++        {
++            int cancel_operation=11;cancel_operation=cancel_operation<<28;
++            actor.CanAddEntityInCargoEx(child,-620062,cancel_operation);
++        }
++        if(child && !server_accepted && status!=0 && status!=1 && child.GetOwner() && child.GetOwner().GetCargo())
++        {
++            Cargo old=child.GetOwner().GetCargo();int idx=old.FindEntityInCargo(child);
++            if(idx>=0) {int old_w,old_h;old.GetItemSize(idx,old_w,old_h);old.Grid2Index(1342177280 | (old_h<<20) | (old_w<<12) | idx,-620062);}
++        }
++        if(child && actor && (status==0 || status==1))
++        {
++            int restored_w=Math.Round(result[1]),restored_h=Math.Round(result[2]);
++            actor.CanAddEntityInCargoEx(child,-620062,1342177280 | (restored_h<<20) | (restored_w<<12));
++        }
++        string item_type="";if(child) item_type=child.GetType();
++        m_DZEquipCompletedRequest=request;
++        GetGame().RPCSingleParam(this,620073,new Param3<int,int,string>(request,status,item_type));
++        Print("[DZ62_REEQUIP_CLIENT] id="+request+" status="+status);
++        UIScriptedMenu menu=GetGame().GetUIManager().FindMenu(MENU_INVENTORY);
++        if(menu) GetGame().GetCallQueue(CALL_CATEGORY_GUI).Call(menu,"DZ62_OnReequipReply",new Param2<int,int>(request,status));
++    }
++
++    bool DZ62_IsHandsOrigin(EntityAI owner,EntityAI item)
++    {
++        if(!owner || !item || !owner.IsInherited(Man)) return false;
++        Man holder=(Man)owner;
++        return holder && holder.GetEntityInHands()==item;
++    }
++
+ }
+ 

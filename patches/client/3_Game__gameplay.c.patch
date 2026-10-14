@@ -1,0 +1,11 @@
+--- a/scripts/3_Game/gameplay.c
++++ b/scripts/3_Game/gameplay.c
+@@ -2332,6 +2332,8 @@
+ //-----------------------------------------------------------------------------
+ class Cargo
+ {
++    // Reserved negative-column protocol; native binding already present in this build.
++    proto native int Grid2Index(int row, int col);
+ 	proto native int GetWidth();
+ 	proto native int GetHeight();
+ 	proto native int GetItemCount();

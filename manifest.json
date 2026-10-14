@@ -1,0 +1,202 @@
+{
+  "release": "12",
+  "runtime_user_test_pending": true,
+  "client_exe_sha256": "423212bad091f47f05bd7621f6ba4040d4f3db4c93752c3f19ee0fa7a62bdb9d",
+  "server_exe_sha256": "531330410a8894b81b10e9e2f3d562b4f8a4c35c925d7504aff5717a17ccccb6",
+  "native_dll_sha256": "aa89fa7b7b0db2e073e73bec764bb57bea2009305b694d000f49d97aa578e6ed",
+  "patches": [
+    {
+      "role": "client1",
+      "file": "3_Game/gameplay.c",
+      "patch": "patches/client/3_Game__gameplay.c.patch",
+      "base_sha256": "dba211807f12892caeedcf589edc3b106e608f018f6d2737ac06711a10663bb7",
+      "result_sha256": "b5612ad698b99f16ba063574ba371725c42173ae82bdd4a46628a8d182f19e95",
+      "patch_sha256": "59b3b49499977eed3f258677680c3fd59519b7c937bf0ce04dfa913afe7b6304"
+    },
+    {
+      "role": "client1",
+      "file": "3_Game/GUI/InventoryGrid.c",
+      "patch": "patches/client/3_Game__GUI__InventoryGrid.c.patch",
+      "base_sha256": "d0cd5d75087f7d52ccd6af078c2cad7b61300d524829de1a67307e073e42c73c",
+      "result_sha256": "bcee403b552ba2957e3663bed36508b0711756e9664758b593908121ff297c8a",
+      "patch_sha256": "46851adf767e930fe5f86e06129522d37e42652ce2691028d9e65e274be11a4c"
+    },
+    {
+      "role": "client1",
+      "file": "4_World/Entities/ItemBase.c",
+      "patch": "patches/client/4_World__Entities__ItemBase.c.patch",
+      "base_sha256": "814d560eaa4995775c565110c45b17a533f6f60787b3f81ba8a4ac9beb8bdbf8",
+      "result_sha256": "58de7e62a7c81b14be8fc9fd682428bc00911b2861538ce67bc4011bb2bf71c5",
+      "patch_sha256": "47a950726c2808e29a36d6649d712311cf881781e547f7c81aeddda77cb4fc65"
+    },
+    {
+      "role": "client1",
+      "file": "5_Mission/GUI/Inventory/InventoryContainer/InventoryContainerEntity.c",
+      "patch": "patches/client/5_Mission__GUI__Inventory__InventoryContainer__InventoryContainerEntity.c.patch",
+      "base_sha256": "e36719b57f813fc67a231cdbd2f1676353139a9ec7afc11dcbbb4bf98079a3b0",
+      "result_sha256": "d9761410e3442cefaadb985f9a064710a4ac8d7cc07a5635c4d3c133c38bb9d5",
+      "patch_sha256": "bb27e56ae194538fc084854044d26b366df2807ce38bd9b1d357dedf96dffc84"
+    },
+    {
+      "role": "client1",
+      "file": "5_Mission/GUI/Inventory/InventoryManager.c",
+      "patch": "patches/client/5_Mission__GUI__Inventory__InventoryManager.c.patch",
+      "base_sha256": "7d7fbc308b41e343873ef11331f913c6dbe518be7af3fc4dea6fa7b0e940380b",
+      "result_sha256": "eed4bcb57baaf42f57f68ea25e822a60f2e9a5423b379493728fca555646e567",
+      "patch_sha256": "bdafe689c6a3f424757a2b3843f7517ca9d8d1b80229e43bf13be9f96c3c5a64"
+    },
+    {
+      "role": "client1",
+      "file": "5_Mission/GUI/Inventory/InventoryView/InventoryView.c",
+      "patch": "patches/client/5_Mission__GUI__Inventory__InventoryView__InventoryView.c.patch",
+      "base_sha256": "fc7833d410e5ab3e3e50866a90c8d1b13cd9ad67ef204ac8bbdf6bcf8b30479d",
+      "result_sha256": "580dc6f056ff128254060e821ca8b03240371f34a2cfa5ffd3b9124b42a060ce",
+      "patch_sha256": "88214934272c14ca9f1a471ac6eedd56bd020c0d3f6d75f24fd01485c8f84aaf"
+    },
+    {
+      "role": "client1",
+      "file": "5_Mission/GUI/Inventory/InventoryView/InventoryViewBase.c",
+      "patch": "patches/client/5_Mission__GUI__Inventory__InventoryView__InventoryViewBase.c.patch",
+      "base_sha256": "5b1953fd1a4f9b851406a048d0e0f2762e626471c0167f96e74cbd29f23937a3",
+      "result_sha256": "b646609d80eba1e01434ff440f43e38b8a967a3db2445960548b3f13512b4141",
+      "patch_sha256": "e31ca4c2e8183f6cc615a98b75b85197a7d1f3d5ef2a68d6e5ffda84fa61c8e3"
+    },
+    {
+      "role": "client1",
+      "file": "5_Mission/GUI/Inventory/InventoryView/InventoryViewGrid.c",
+      "patch": "patches/client/5_Mission__GUI__Inventory__InventoryView__InventoryViewGrid.c.patch",
+      "base_sha256": "00e36ee18912a3fe347fdc10674c44cfe8d3c8d107122519047dec0cef782144",
+      "result_sha256": "4a1be0ad42cd55f54f07593f6eb0763b43fa9b1b3d30c47c8eec01c60cbf9d74",
+      "patch_sha256": "48d445fa4fa5bf91b5c2c4a26209e6f63779e66862408add104db1ffbac86a3e"
+    },
+    {
+      "role": "client1",
+      "file": "5_Mission/GUI/InventoryMenu.c",
+      "patch": "patches/client/5_Mission__GUI__InventoryMenu.c.patch",
+      "base_sha256": "ffb3fb9f9dadc8c367b74683b929f565f69dcd5eb21ec2e14212f2c3cedd1240",
+      "result_sha256": "3a3df8d4ca4725ead407982175e41a29a82abe2667e99a3c9ec33fbfb98d7b59",
+      "patch_sha256": "25b2cd7d90e22df8ac25768852e857141b8bcf3945b9c472162d4f19ef320b05"
+    },
+    {
+      "role": "client1",
+      "file": "5_Mission/mission/missionGameplay.c",
+      "patch": "patches/client/5_Mission__mission__missionGameplay.c.patch",
+      "base_sha256": "ab4fa44d5a70fe664f360a0fd8880acb9c39c4ce7ebf67198208d8b77547965d",
+      "result_sha256": "2a6e61e66962556db819f0ee1fd74413eb035d2fc58521301c5a35799987a3fc",
+      "patch_sha256": "944a6528a018b8ca9c6eee0b896beac63c058f839e379f90445ee421f743d074"
+    },
+    {
+      "role": "client1",
+      "file": "5_Mission/mission/missionServer.c",
+      "patch": "patches/client/5_Mission__mission__missionServer.c.patch",
+      "base_sha256": "da41f614cfc46075c3035b3a0a4ae8acd97c72389f7b8407d11a1eed3c8430a4",
+      "result_sha256": "c58b00d0bda40f0481b2c990b377e21c9e06e494b66b03cc6e6df23594e4f9e9",
+      "patch_sha256": "aa38e46db03121044c8af587af0a4cf3123eb4f0176f0c1e715dee0bd0667a51"
+    },
+    {
+      "role": "server",
+      "file": "3_Game/gameplay.c",
+      "patch": "patches/server/3_Game__gameplay.c.patch",
+      "base_sha256": "dba211807f12892caeedcf589edc3b106e608f018f6d2737ac06711a10663bb7",
+      "result_sha256": "b5612ad698b99f16ba063574ba371725c42173ae82bdd4a46628a8d182f19e95",
+      "patch_sha256": "59b3b49499977eed3f258677680c3fd59519b7c937bf0ce04dfa913afe7b6304"
+    },
+    {
+      "role": "server",
+      "file": "3_Game/GUI/InventoryGrid.c",
+      "patch": "patches/server/3_Game__GUI__InventoryGrid.c.patch",
+      "base_sha256": "d0cd5d75087f7d52ccd6af078c2cad7b61300d524829de1a67307e073e42c73c",
+      "result_sha256": "bcee403b552ba2957e3663bed36508b0711756e9664758b593908121ff297c8a",
+      "patch_sha256": "46851adf767e930fe5f86e06129522d37e42652ce2691028d9e65e274be11a4c"
+    },
+    {
+      "role": "server",
+      "file": "4_World/Entities/ItemBase.c",
+      "patch": "patches/server/4_World__Entities__ItemBase.c.patch",
+      "base_sha256": "814d560eaa4995775c565110c45b17a533f6f60787b3f81ba8a4ac9beb8bdbf8",
+      "result_sha256": "58de7e62a7c81b14be8fc9fd682428bc00911b2861538ce67bc4011bb2bf71c5",
+      "patch_sha256": "47a950726c2808e29a36d6649d712311cf881781e547f7c81aeddda77cb4fc65"
+    },
+    {
+      "role": "server",
+      "file": "5_Mission/GUI/Inventory/InventoryContainer/InventoryContainerEntity.c",
+      "patch": "patches/server/5_Mission__GUI__Inventory__InventoryContainer__InventoryContainerEntity.c.patch",
+      "base_sha256": "e36719b57f813fc67a231cdbd2f1676353139a9ec7afc11dcbbb4bf98079a3b0",
+      "result_sha256": "d9761410e3442cefaadb985f9a064710a4ac8d7cc07a5635c4d3c133c38bb9d5",
+      "patch_sha256": "bb27e56ae194538fc084854044d26b366df2807ce38bd9b1d357dedf96dffc84"
+    },
+    {
+      "role": "server",
+      "file": "5_Mission/GUI/Inventory/InventoryManager.c",
+      "patch": "patches/server/5_Mission__GUI__Inventory__InventoryManager.c.patch",
+      "base_sha256": "7d7fbc308b41e343873ef11331f913c6dbe518be7af3fc4dea6fa7b0e940380b",
+      "result_sha256": "eed4bcb57baaf42f57f68ea25e822a60f2e9a5423b379493728fca555646e567",
+      "patch_sha256": "bdafe689c6a3f424757a2b3843f7517ca9d8d1b80229e43bf13be9f96c3c5a64"
+    },
+    {
+      "role": "server",
+      "file": "5_Mission/GUI/Inventory/InventoryView/InventoryView.c",
+      "patch": "patches/server/5_Mission__GUI__Inventory__InventoryView__InventoryView.c.patch",
+      "base_sha256": "fc7833d410e5ab3e3e50866a90c8d1b13cd9ad67ef204ac8bbdf6bcf8b30479d",
+      "result_sha256": "580dc6f056ff128254060e821ca8b03240371f34a2cfa5ffd3b9124b42a060ce",
+      "patch_sha256": "88214934272c14ca9f1a471ac6eedd56bd020c0d3f6d75f24fd01485c8f84aaf"
+    },
+    {
+      "role": "server",
+      "file": "5_Mission/GUI/Inventory/InventoryView/InventoryViewBase.c",
+      "patch": "patches/server/5_Mission__GUI__Inventory__InventoryView__InventoryViewBase.c.patch",
+      "base_sha256": "5b1953fd1a4f9b851406a048d0e0f2762e626471c0167f96e74cbd29f23937a3",
+      "result_sha256": "b646609d80eba1e01434ff440f43e38b8a967a3db2445960548b3f13512b4141",
+      "patch_sha256": "e31ca4c2e8183f6cc615a98b75b85197a7d1f3d5ef2a68d6e5ffda84fa61c8e3"
+    },
+    {
+      "role": "server",
+      "file": "5_Mission/GUI/Inventory/InventoryView/InventoryViewGrid.c",
+      "patch": "patches/server/5_Mission__GUI__Inventory__InventoryView__InventoryViewGrid.c.patch",
+      "base_sha256": "00e36ee18912a3fe347fdc10674c44cfe8d3c8d107122519047dec0cef782144",
+      "result_sha256": "4a1be0ad42cd55f54f07593f6eb0763b43fa9b1b3d30c47c8eec01c60cbf9d74",
+      "patch_sha256": "48d445fa4fa5bf91b5c2c4a26209e6f63779e66862408add104db1ffbac86a3e"
+    },
+    {
+      "role": "server",
+      "file": "5_Mission/GUI/InventoryMenu.c",
+      "patch": "patches/server/5_Mission__GUI__InventoryMenu.c.patch",
+      "base_sha256": "ffb3fb9f9dadc8c367b74683b929f565f69dcd5eb21ec2e14212f2c3cedd1240",
+      "result_sha256": "3a3df8d4ca4725ead407982175e41a29a82abe2667e99a3c9ec33fbfb98d7b59",
+      "patch_sha256": "25b2cd7d90e22df8ac25768852e857141b8bcf3945b9c472162d4f19ef320b05"
+    },
+    {
+      "role": "server",
+      "file": "5_Mission/mission/missionGameplay.c",
+      "patch": "patches/server/5_Mission__mission__missionGameplay.c.patch",
+      "base_sha256": "ab4fa44d5a70fe664f360a0fd8880acb9c39c4ce7ebf67198208d8b77547965d",
+      "result_sha256": "2a6e61e66962556db819f0ee1fd74413eb035d2fc58521301c5a35799987a3fc",
+      "patch_sha256": "944a6528a018b8ca9c6eee0b896beac63c058f839e379f90445ee421f743d074"
+    },
+    {
+      "role": "server",
+      "file": "5_Mission/mission/missionServer.c",
+      "patch": "patches/server/5_Mission__mission__missionServer.c.patch",
+      "base_sha256": "da41f614cfc46075c3035b3a0a4ae8acd97c72389f7b8407d11a1eed3c8430a4",
+      "result_sha256": "c58b00d0bda40f0481b2c990b377e21c9e06e494b66b03cc6e6df23594e4f9e9",
+      "patch_sha256": "aa38e46db03121044c8af587af0a4cf3123eb4f0176f0c1e715dee0bd0667a51"
+    }
+  ],
+  "native_source_files": [
+    "native/src/bridge_win.cpp",
+    "native/src/debug_binding_move.cpp",
+    "native/src/move_win.cpp",
+    "native/src/native_trace.cpp",
+    "native/src/rotation_core.cpp",
+    "native/include/bridge_api.hpp",
+    "native/include/build_profiles.hpp",
+    "native/include/move_profiles.hpp",
+    "native/include/native_trace.hpp",
+    "native/include/near_dispatch.hpp",
+    "native/include/rectangle_call.hpp",
+    "native/include/rotation_core.hpp",
+    "native/src/debug_loader.cpp"
+  ],
+  "required_builds": "DayZ 0.62.144063 client and DayZServer 0.62.140099 server, x64",
+  "notes": "The script patches are based on local extracted scripts. The binaries and source game files themselves are excluded."
+}

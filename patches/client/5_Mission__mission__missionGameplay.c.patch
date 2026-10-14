@@ -1,0 +1,40 @@
+--- a/scripts/5_Mission/mission/missionGameplay.c
++++ b/scripts/5_Mission/mission/missionGameplay.c
+@@ -187,6 +187,15 @@
+ 		InventoryMenu inventory = manager.FindMenu(MENU_INVENTORY);
+ 		InspectMenu inspect = manager.FindMenu(MENU_INSPECT);
+ 		Input input = GetGame().GetInput();
++        if (inventory && inventory.DZ62_SpaceActive())
++        {
++            input.DisableKey(KeyCode.KC_SPACE);
++            input.DisableKey(KeyCode.KC_SPACE | INPUT_ACTION_TYPE_STATE);
++            input.DisableKey(KeyCode.KC_SPACE | INPUT_ACTION_TYPE_DOWN_EVENT);
++            input.DisableKey(KeyCode.KC_SPACE | INPUT_ACTION_TYPE_UP_EVENT);
++            input.DisableKey(KeyCode.KC_SPACE | INPUT_ACTION_TYPE_DOUBLETAP);
++        }
++
+ 		
+ 		if (inspect && player.CanOpenInventory() == false)
+ 		{
+@@ -342,6 +351,9 @@
+ 
+ 	void OnKeyPress(int key)
+ 	{
++        InventoryMenu rotation_menu = GetGame().GetUIManager().FindMenu(MENU_INVENTORY);
++        if (rotation_menu && rotation_menu.DZ62_SpaceInput(key,true)) return;
++
+ 		super.OnKeyPress(key);
+ 		m_hud.KeyPress(key);
+ 		if ( GetGame().IsDebug() )
+@@ -537,4 +549,11 @@
+ 	{
+ 		return true;
+ 	}
++
++    void OnKeyRelease(int key)
++    {
++        InventoryMenu rotation_menu = GetGame().GetUIManager().FindMenu(MENU_INVENTORY);
++        if (rotation_menu && rotation_menu.DZ62_SpaceInput(key,false)) return;
++        super.OnKeyRelease(key);
++    }
+ }

@@ -1,0 +1,24 @@
+--- a/scripts/5_Mission/GUI/Inventory/InventoryView/InventoryViewBase.c
++++ b/scripts/5_Mission/GUI/Inventory/InventoryView/InventoryViewBase.c
+@@ -153,7 +153,9 @@
+ 		int index_from, index_to, flags;
+ 		vector data;
+ 		
+-		if (manager.IsDragging() == false || dragged_item == NULL) return false;	
++		if (manager.IsDragging() == false || dragged_item == NULL) return false;
++        if (manager.DZ62_RestrictDrop()) return manager.DZ62_OriginalDrop(m_entity.Ptr(), grid, row, col, testOnly);
++	
+ 		
+ 		if (dragged_item && dragged_item.CanRemoveEntity() == false)
+ 		{
+@@ -484,4 +486,10 @@
+ 	{
+   		return m_container_icon;
+   	}
++
++    vector GetItemRotation(InventoryGrid grid, InventoryItem item)
++    {
++        if (grid.IsIcon()) return Vector(0,0,0);
++        return InventoryManager.GetInstance().DZ62_PreviewRotation(item);
++    }
+ }
